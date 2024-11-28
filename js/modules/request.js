@@ -6,12 +6,33 @@ export function initializeRequestConfig() {
     const methodSelect = document.getElementById('httpMethod');
     const urlInput = document.getElementById('urlInput');
     const startTestBtn = document.getElementById('startTest');
+    const paramsTab = document.querySelector('[data-tab="params"]');
+    const bodyTab = document.querySelector('[data-tab="body"]');
+
+    function updateMethodBasedUI() {
+        const method = methodSelect.value;
+        const hasBody = ['POST', 'PUT'].includes(method);
+        
+        // Show/hide tabs based on method
+        if (hasBody) {
+            paramsTab.classList.remove('hidden');
+            bodyTab.classList.remove('hidden');
+        } else {
+            paramsTab.classList.remove('hidden');
+            bodyTab.classList.add('hidden');
+            // If body tab is active, switch to params
+            if (bodyTab.classList.contains('active')) {
+                paramsTab.click();
+            }
+        }
+    }
 
     methodSelect.addEventListener('change', () => {
         const state = getState();
         const profile = getProfile(state.currentProfile);
         profile.method = methodSelect.value;
         updateTargetFields();
+        updateMethodBasedUI();
     });
 
     urlInput.addEventListener('input', () => {
@@ -49,11 +70,12 @@ export function initializeRequestConfig() {
             const response = await sendRequest(profile);
             updateResults(response);
         } catch (error) {
-            console.error('Test execution failed:', error);
-            // Show error in results
-            updateResults({ error: error.message });
+            console.error('Error sending request:', error);
         }
     });
+
+    // Initialize UI based on current method
+    updateMethodBasedUI();
 }
 
 export async function sendRequest(profile) {

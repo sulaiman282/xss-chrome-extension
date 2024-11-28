@@ -7,6 +7,11 @@ export function initializeTabs() {
 
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
+            // Skip if tab is hidden
+            if (tab.classList.contains('hidden')) {
+                return;
+            }
+
             const target = tab.dataset.tab;
 
             // Update tab buttons
@@ -16,7 +21,6 @@ export function initializeTabs() {
             // Update content visibility
             contents.forEach(content => {
                 content.classList.add('hidden');
-                content.classList.remove('active');
             });
 
             const activeContent = document.getElementById(`${target}Tab`);

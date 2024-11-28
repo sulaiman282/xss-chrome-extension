@@ -69,6 +69,94 @@ function createFormField(container) {
     container.appendChild(fieldDiv);
 }
 
+// Function to get all available target fields
+export function getTargetFields() {
+    const fields = [];
+    const bodyType = document.getElementById('bodyType').value;
+
+    // Get params fields
+    document.querySelectorAll('#paramsContainer > div').forEach(field => {
+        const [key] = field.children;
+        if (key.value) {
+            fields.push({
+                name: key.value,
+                type: 'param',
+                label: `Param: ${key.value}`
+            });
+        }
+    });
+
+    // Get body fields based on type
+    switch(bodyType) {
+        case 'raw':
+            try {
+                const rawContent = document.getElementById('bodyContent').value;
+                // Try to parse as JSON
+                const jsonContent = JSON.parse(rawContent);
+                const jsonFields = extractJsonFields(jsonContent);
+                fields.push(...jsonFields);
+            } catch (e) {
+                // If not valid JSON, add as single field
+                fields.push({
+                    name: 'body',
+                    type: 'raw',
+                    label: 'Body (Raw)'
+                });
+            }
+            break;
+
+        case 'form-data':
+            document.querySelectorAll('#formDataContainer > div').forEach(field => {
+                const [key, valueWrapper, type] = field.children;
+                if (key.value) {
+                    fields.push({
+                        name: key.value,
+                        type: 'form-data',
+                        label: `Form Data: ${key.value}`
+                    });
+                }
+            });
+            break;
+
+        case 'x-www-form-urlencoded':
+            document.querySelectorAll('#urlencodedContainer > div').forEach(field => {
+                const [key] = field.children;
+                if (key.value) {
+                    fields.push({
+                        name: key.value,
+                        type: 'urlencoded',
+                        label: `Form URL: ${key.value}`
+                    });
+                }
+            });
+            break;
+    }
+
+    return fields;
+}
+
+// Helper function to extract fields from JSON object
+function extractJsonFields(obj, prefix = '') {
+    const fields = [];
+    
+    for (const [key, value] of Object.entries(obj)) {
+        const fieldName = prefix ? `${prefix}.${key}` : key;
+        
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+            // Recursively extract nested object fields
+            fields.push(...extractJsonFields(value, fieldName));
+        } else {
+            fields.push({
+                name: fieldName,
+                type: 'json',
+                label: `JSON: ${fieldName}`
+            });
+        }
+    }
+    
+    return fields;
+}
+
 // Initialize body type handling
 export function initializeBodyHandling() {
     const bodyType = document.getElementById('bodyType');

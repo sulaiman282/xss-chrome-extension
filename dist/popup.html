@@ -33,7 +33,7 @@
                 </select>
                 <input type="text" id="urlInput" placeholder="Enter URL"
                     class="form-input rounded-md border-gray-300 w-full">
-                <button id="pasteBtn"
+                <button id="pasteClipboard"
                     class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 w-fit">Paste&nbsp;Clipboard</button>
             </div>
         </div>
@@ -44,8 +44,8 @@
         <div class="bg-white border-b">
             <nav class="flex space-x-4 px-4">
                 <button class="tab-button active" data-tab="params">Params</button>
-                <button class="tab-button" data-tab="headers">Headers</button>
-                <button class="tab-button" data-tab="body">Body</button>
+                <button class="tab-button hidden" data-tab="headers">Headers</button>
+                <button class="tab-button hidden" data-tab="body">Body</button>
                 <button class="tab-button" data-tab="xssconfig">XSS Config</button>
                 <button class="tab-button" data-tab="results">Results</button>
             </nav>
@@ -165,8 +165,6 @@
         <div class="flex justify-between items-center">
             <div class="flex space-x-2">
                 <button id="clearBtn" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Clear</button>
-                <button id="pasteBtn" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Paste
-                    cURL</button>
             </div>
             <button id="startTest" class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Start
                 Test</button>
