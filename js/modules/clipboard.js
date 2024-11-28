@@ -1,219 +1,251 @@
 // Clipboard Module
 import { getState, getProfile } from './state.js';
-import { parseCurlCommand } from '../utils/parser.js';
-import { createKeyValueRow } from './ui.js';
+import { updateMethod } from './method.js';
 
 export function initializeClipboardPaste() {
     const pasteButton = document.getElementById('pasteClipboard');
     
-    if (!pasteButton) return; // Exit if button not found
-    
     pasteButton.addEventListener('click', async () => {
         try {
             const text = await navigator.clipboard.readText();
-            const isCurl = text.trim().toLowerCase().startsWith('curl ');
+            const curlData = parseCurlCommand(text);
             
-            if (isCurl) {
-                const parsed = parseCurlCommand(text);
-                updateUIFromParsed(parsed);
-            } else {
-                // Just update URL if not a cURL command
-                document.getElementById('urlInput').value = text;
-                const state = getState();
-                const profile = getProfile(state.currentProfile);
-                profile.url = text;
+            if (!curlData) {
+                console.error('Invalid cURL command');
+                return;
             }
+            
+            // Update profile with parsed data
+            const state = getState();
+            const profile = getProfile(state.currentProfile);
+            
+            // Update URL
+            profile.url = curlData.url;
+            const urlInput = document.getElementById('urlInput');
+            if (urlInput) urlInput.value = curlData.url;
+            
+            // Update method (handle _method override correctly)
+            const urlParams = new URLSearchParams(new URL(curlData.url).search);
+            const methodOverride = urlParams.get('_method');
+            profile.method = methodOverride || curlData.method;
+            updateMethod(profile.method);
+            
+            // Update headers
+            profile.headers = curlData.headers;
+            updateHeadersUI(curlData.headers);
+            
+            // Update body
+            if (curlData.body) {
+                profile.body = curlData.body;
+                const bodyTypeSelect = document.getElementById('bodyType');
+                const bodyContent = document.getElementById('bodyContent');
+                const formDataBody = document.getElementById('formDataBody');
+                const urlencodedBody = document.getElementById('urlencodedBody');
+
+                // Determine content type
+                const contentType = curlData.headers['content-type'] || '';
+                
+                if (contentType.includes('application/json')) {
+                    if (bodyTypeSelect) bodyTypeSelect.value = 'raw';
+                    if (bodyContent) {
+                        bodyContent.classList.remove('hidden');
+                        bodyContent.value = JSON.stringify(curlData.body, null, 2);
+                    }
+                    if (formDataBody) formDataBody.classList.add('hidden');
+                    if (urlencodedBody) urlencodedBody.classList.add('hidden');
+                } else if (contentType.includes('multipart/form-data')) {
+                    if (bodyTypeSelect) bodyTypeSelect.value = 'form-data';
+                    if (bodyContent) bodyContent.classList.add('hidden');
+                    if (formDataBody) {
+                        formDataBody.classList.remove('hidden');
+                        updateFormDataUI(curlData.body);
+                    }
+                    if (urlencodedBody) urlencodedBody.classList.add('hidden');
+                } else if (contentType.includes('application/x-www-form-urlencoded')) {
+                    if (bodyTypeSelect) bodyTypeSelect.value = 'x-www-form-urlencoded';
+                    if (bodyContent) bodyContent.classList.add('hidden');
+                    if (formDataBody) formDataBody.classList.add('hidden');
+                    if (urlencodedBody) {
+                        urlencodedBody.classList.remove('hidden');
+                        updateUrlEncodedUI(curlData.body);
+                    }
+                } else {
+                    if (bodyTypeSelect) bodyTypeSelect.value = 'none';
+                    if (bodyContent) bodyContent.classList.add('hidden');
+                    if (formDataBody) formDataBody.classList.add('hidden');
+                    if (urlencodedBody) urlencodedBody.classList.add('hidden');
+                }
+            }
+            
+            // Update params
+            if (curlData.params) {
+                profile.params = curlData.params;
+                updateParamsUI(curlData.params);
+            }
+            
         } catch (error) {
-            console.error('Failed to read clipboard:', error);
+            console.error('Error pasting cURL command:', error);
         }
     });
 }
 
-function updateUIFromParsed(parsed) {
-    const state = getState();
-    const profile = getProfile(state.currentProfile);
-
-    // Update method
-    const methodSelect = document.getElementById('httpMethod');
-    methodSelect.value = parsed.method;
-    profile.method = parsed.method;
-
-    // Update URL
-    const urlInput = document.getElementById('urlInput');
-    urlInput.value = parsed.url;
-    profile.url = parsed.url;
-
-    // Process headers for auth and regular headers
-    const headersContainer = document.getElementById('headersContainer');
-    const headersTab = document.querySelector('[data-tab="headers"]');
-    const regularHeaders = [];
-    let authHeader = null;
-
-    parsed.headers.forEach(([key, value]) => {
-        if (key.toLowerCase() === 'authorization') {
-            authHeader = value;
-        } else {
-            regularHeaders.push([key, value]);
-        }
-    });
-
-    // Handle authorization
-    if (authHeader) {
-        const authType = document.getElementById('authType');
-        const authValue = authHeader.trim();
-
-        if (authValue.toLowerCase().startsWith('basic ')) {
-            // Handle Basic Auth
-            authType.value = 'basic';
-            document.getElementById('basicAuth').classList.remove('hidden');
-            document.getElementById('bearerAuth').classList.add('hidden');
-            document.getElementById('apiAuth').classList.add('hidden');
-
-            try {
-                const base64Credentials = authValue.split(' ')[1];
-                const credentials = atob(base64Credentials);
-                const [username, password] = credentials.split(':');
-                
-                document.getElementById('basicUsername').value = username || '';
-                document.getElementById('basicPassword').value = password || '';
-                
-                profile.auth = {
-                    type: 'basic',
-                    username,
-                    password
-                };
-            } catch (e) {
-                console.error('Failed to parse Basic auth:', e);
-            }
-        } else if (authValue.toLowerCase().startsWith('bearer ')) {
-            // Handle Bearer Token
-            authType.value = 'bearer';
-            document.getElementById('basicAuth').classList.add('hidden');
-            document.getElementById('bearerAuth').classList.remove('hidden');
-            document.getElementById('apiAuth').classList.add('hidden');
-
-            const token = authValue.split(' ')[1];
-            document.getElementById('bearerToken').value = token;
-            
-            profile.auth = {
-                type: 'bearer',
-                token
-            };
-        } else {
-            // Try to handle as API Key
-            authType.value = 'api';
-            document.getElementById('basicAuth').classList.add('hidden');
-            document.getElementById('bearerAuth').classList.add('hidden');
-            document.getElementById('apiAuth').classList.remove('hidden');
-
-            document.getElementById('apiKeyName').value = 'Authorization';
-            document.getElementById('apiKeyValue').value = authValue;
-            document.getElementById('apiKeyLocation').value = 'header';
-            
-            profile.auth = {
-                type: 'api',
-                name: 'Authorization',
-                value: authValue,
-                location: 'header'
-            };
-        }
-    }
-
-    // Update regular headers
-    if (regularHeaders.length > 0) {
-        headersTab.classList.remove('hidden');
-        headersContainer.innerHTML = '';
-        regularHeaders.forEach(([key, value]) => {
-            const row = createKeyValueRow('headers', key, value);
-            headersContainer.appendChild(row);
-        });
-        profile.headers = regularHeaders;
-    }
-
-    // Update body if present
-    if (parsed.body) {
-        const bodyTab = document.querySelector('[data-tab="body"]');
-        bodyTab.classList.remove('hidden');
-
-        try {
-            // Try to parse as JSON
-            const jsonBody = JSON.parse(parsed.body);
-            const bodyType = document.getElementById('bodyType');
-            const bodyContent = document.getElementById('bodyContent');
-            
-            bodyType.value = 'raw';
-            bodyContent.value = JSON.stringify(jsonBody, null, 2);
-            
-            // Switch to raw body view
-            document.getElementById('rawBody').classList.remove('hidden');
-            document.getElementById('formDataBody').classList.add('hidden');
-            document.getElementById('urlencodedBody').classList.add('hidden');
-            
-            profile.body = {
-                type: 'raw',
-                content: bodyContent.value
-            };
-        } catch (e) {
-            // If not JSON, try to parse as form data
-            if (parsed.body.includes('=')) {
-                const params = new URLSearchParams(parsed.body);
-                const bodyType = document.getElementById('bodyType');
-                bodyType.value = 'x-www-form-urlencoded';
-                
-                // Switch to urlencoded view
-                document.getElementById('rawBody').classList.add('hidden');
-                document.getElementById('formDataBody').classList.add('hidden');
-                document.getElementById('urlencodedBody').classList.remove('hidden');
-                
-                // Clear existing fields
-                const urlencodedContainer = document.getElementById('urlencodedContainer');
-                urlencodedContainer.innerHTML = '';
-                
-                // Add fields
-                params.forEach((value, key) => {
-                    const row = createKeyValueRow('urlencoded', key, value);
-                    urlencodedContainer.appendChild(row);
-                });
-                
-                profile.body = {
-                    type: 'x-www-form-urlencoded',
-                    content: parsed.body
-                };
-            } else {
-                // Treat as raw text
-                const bodyType = document.getElementById('bodyType');
-                const bodyContent = document.getElementById('bodyContent');
-                
-                bodyType.value = 'raw';
-                bodyContent.value = parsed.body;
-                
-                // Switch to raw body view
-                document.getElementById('rawBody').classList.remove('hidden');
-                document.getElementById('formDataBody').classList.add('hidden');
-                document.getElementById('urlencodedBody').classList.add('hidden');
-                
-                profile.body = {
-                    type: 'raw',
-                    content: parsed.body
-                };
-            }
-        }
-    }
-
-    // Update URL parameters if present
+function parseCurlCommand(curlCommand) {
     try {
-        const urlObj = new URL(parsed.url);
-        const params = Array.from(urlObj.searchParams.entries());
-        if (params.length > 0) {
-            const paramsContainer = document.getElementById('paramsContainer');
-            paramsContainer.innerHTML = '';
-            params.forEach(([key, value]) => {
-                const row = createKeyValueRow('params', key, value);
-                paramsContainer.appendChild(row);
-            });
-            profile.params = params;
+        const lines = curlCommand.split('\n').map(line => line.trim());
+        let url = '', method = 'GET', headers = {}, body = null, params = [];
+        
+        // Extract URL and method
+        const urlMatch = lines[0].match(/'([^']+)'/);
+        if (urlMatch) {
+            url = urlMatch[1];
+            const urlObj = new URL(url);
+            params = Array.from(urlObj.searchParams.entries());
         }
+        
+        // Extract method
+        if (lines[0].includes('--request') || lines[0].includes('-X')) {
+            const methodMatch = lines[0].match(/(?:--request|-X)\s+(\w+)/);
+            if (methodMatch) {
+                method = methodMatch[1];
+            }
+        }
+        
+        // Extract headers and body
+        let inBody = false;
+        let bodyContent = [];
+        let contentType = '';
+        
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i];
+            
+            if (line.startsWith('-H') || line.startsWith('--header')) {
+                const headerMatch = line.match(/'([^:]+):\s*([^']+)'/);
+                if (headerMatch) {
+                    const [_, name, value] = headerMatch;
+                    headers[name.toLowerCase()] = value;
+                    if (name.toLowerCase() === 'content-type') {
+                        contentType = value;
+                    }
+                }
+            } else if (line.includes('--data-raw') || line.includes('--data')) {
+                inBody = true;
+                const bodyMatch = line.match(/'(.+)'/);
+                if (bodyMatch) {
+                    bodyContent.push(bodyMatch[1]);
+                }
+            } else if (inBody && line !== '\\') {
+                const bodyMatch = line.match(/'(.+)'/);
+                if (bodyMatch) {
+                    bodyContent.push(bodyMatch[1]);
+                }
+            }
+        }
+        
+        // Parse body based on content type
+        if (bodyContent.length > 0) {
+            const rawBody = bodyContent.join('');
+            if (contentType.includes('application/json')) {
+                try {
+                    body = JSON.parse(rawBody);
+                } catch (e) {
+                    console.error('Error parsing JSON body:', e);
+                }
+            } else if (contentType.includes('application/x-www-form-urlencoded')) {
+                body = {};
+                const searchParams = new URLSearchParams(rawBody);
+                for (const [key, value] of searchParams) {
+                    body[key] = value;
+                }
+            } else if (contentType.includes('multipart/form-data')) {
+                body = parseMultipartFormData(rawBody);
+            } else {
+                body = rawBody;
+            }
+        }
+        
+        return { url, method, headers, body, params };
     } catch (error) {
-        console.error('Failed to parse URL parameters:', error);
+        console.error('Error parsing cURL command:', error);
+        return null;
+    }
+}
+
+function parseMultipartFormData(rawBody) {
+    const formData = {};
+    try {
+        const parts = rawBody.split('&');
+        for (const part of parts) {
+            const [key, value] = part.split('=');
+            if (key && value) {
+                formData[decodeURIComponent(key)] = decodeURIComponent(value);
+            }
+        }
+    } catch (e) {
+        console.error('Error parsing multipart form data:', e);
+    }
+    return formData;
+}
+
+function updateFormDataUI(formData) {
+    const container = document.getElementById('formDataBody');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    for (const [key, value] of Object.entries(formData)) {
+        const row = document.createElement('div');
+        row.className = 'flex space-x-2 mb-2';
+        row.innerHTML = `
+            <input type="text" class="form-input flex-1" value="${key}" readonly>
+            <input type="text" class="form-input flex-1" value="${value}" readonly>
+        `;
+        container.appendChild(row);
+    }
+}
+
+function updateUrlEncodedUI(data) {
+    const container = document.getElementById('urlencodedBody');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    for (const [key, value] of Object.entries(data)) {
+        const row = document.createElement('div');
+        row.className = 'flex space-x-2 mb-2';
+        row.innerHTML = `
+            <input type="text" class="form-input flex-1" value="${key}" readonly>
+            <input type="text" class="form-input flex-1" value="${value}" readonly>
+        `;
+        container.appendChild(row);
+    }
+}
+
+function updateHeadersUI(headers) {
+    const container = document.getElementById('headersContainer');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    for (const [name, value] of Object.entries(headers)) {
+        const row = document.createElement('div');
+        row.className = 'flex space-x-2 mb-2';
+        row.innerHTML = `
+            <input type="text" class="form-input flex-1" value="${name}" readonly>
+            <input type="text" class="form-input flex-1" value="${value}" readonly>
+        `;
+        container.appendChild(row);
+    }
+}
+
+function updateParamsUI(params) {
+    const container = document.getElementById('paramsContainer');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    for (const [key, value] of params) {
+        const row = document.createElement('div');
+        row.className = 'flex space-x-2 mb-2';
+        row.innerHTML = `
+            <input type="text" class="form-input flex-1" value="${key}" readonly>
+            <input type="text" class="form-input flex-1" value="${value}" readonly>
+        `;
+        container.appendChild(row);
     }
 }

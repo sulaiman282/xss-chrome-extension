@@ -5,6 +5,7 @@ import { initializeClipboardPaste } from './modules/clipboard.js';
 import { initializeProfileManagement } from './modules/profiles.js';
 import { initializeBodyHandling } from './modules/body.js';
 import { initializeAuth } from './modules/auth.js';
+import { initializeMethodHandling } from './modules/method.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Initializing popup...');
@@ -21,6 +22,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize Body Handling
     initializeBodyHandling();
+    
+    // Initialize Method Handling
+    initializeMethodHandling();
     
     // Initialize Auth
     initializeAuth();

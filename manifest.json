@@ -8,6 +8,10 @@
     "storage",
     "activeTab"
   ],
+  "web_accessible_resources": [{
+    "resources": ["payloads/*.txt"],
+    "matches": ["<all_urls>"]
+  }],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
