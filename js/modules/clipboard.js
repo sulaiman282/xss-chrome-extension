@@ -43,19 +43,91 @@ function updateUIFromParsed(parsed) {
     urlInput.value = parsed.url;
     profile.url = parsed.url;
 
-    // Update headers
+    // Process headers for auth and regular headers
     const headersContainer = document.getElementById('headersContainer');
     const headersTab = document.querySelector('[data-tab="headers"]');
-    
-    // Show headers tab if we have headers
-    if (parsed.headers.length > 0) {
+    const regularHeaders = [];
+    let authHeader = null;
+
+    parsed.headers.forEach(([key, value]) => {
+        if (key.toLowerCase() === 'authorization') {
+            authHeader = value;
+        } else {
+            regularHeaders.push([key, value]);
+        }
+    });
+
+    // Handle authorization
+    if (authHeader) {
+        const authType = document.getElementById('authType');
+        const authValue = authHeader.trim();
+
+        if (authValue.toLowerCase().startsWith('basic ')) {
+            // Handle Basic Auth
+            authType.value = 'basic';
+            document.getElementById('basicAuth').classList.remove('hidden');
+            document.getElementById('bearerAuth').classList.add('hidden');
+            document.getElementById('apiAuth').classList.add('hidden');
+
+            try {
+                const base64Credentials = authValue.split(' ')[1];
+                const credentials = atob(base64Credentials);
+                const [username, password] = credentials.split(':');
+                
+                document.getElementById('basicUsername').value = username || '';
+                document.getElementById('basicPassword').value = password || '';
+                
+                profile.auth = {
+                    type: 'basic',
+                    username,
+                    password
+                };
+            } catch (e) {
+                console.error('Failed to parse Basic auth:', e);
+            }
+        } else if (authValue.toLowerCase().startsWith('bearer ')) {
+            // Handle Bearer Token
+            authType.value = 'bearer';
+            document.getElementById('basicAuth').classList.add('hidden');
+            document.getElementById('bearerAuth').classList.remove('hidden');
+            document.getElementById('apiAuth').classList.add('hidden');
+
+            const token = authValue.split(' ')[1];
+            document.getElementById('bearerToken').value = token;
+            
+            profile.auth = {
+                type: 'bearer',
+                token
+            };
+        } else {
+            // Try to handle as API Key
+            authType.value = 'api';
+            document.getElementById('basicAuth').classList.add('hidden');
+            document.getElementById('bearerAuth').classList.add('hidden');
+            document.getElementById('apiAuth').classList.remove('hidden');
+
+            document.getElementById('apiKeyName').value = 'Authorization';
+            document.getElementById('apiKeyValue').value = authValue;
+            document.getElementById('apiKeyLocation').value = 'header';
+            
+            profile.auth = {
+                type: 'api',
+                name: 'Authorization',
+                value: authValue,
+                location: 'header'
+            };
+        }
+    }
+
+    // Update regular headers
+    if (regularHeaders.length > 0) {
         headersTab.classList.remove('hidden');
         headersContainer.innerHTML = '';
-        parsed.headers.forEach(([key, value]) => {
+        regularHeaders.forEach(([key, value]) => {
             const row = createKeyValueRow('headers', key, value);
             headersContainer.appendChild(row);
         });
-        profile.headers = parsed.headers;
+        profile.headers = regularHeaders;
     }
 
     // Update body if present

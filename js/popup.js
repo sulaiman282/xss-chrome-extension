@@ -4,6 +4,7 @@ import { initializeXSSConfig, loadXSSPayloads } from './modules/xss.js';
 import { initializeClipboardPaste } from './modules/clipboard.js';
 import { initializeProfileManagement } from './modules/profiles.js';
 import { initializeBodyHandling } from './modules/body.js';
+import { initializeAuth } from './modules/auth.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Initializing popup...');
@@ -20,6 +21,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize Body Handling
     initializeBodyHandling();
+    
+    // Initialize Auth
+    initializeAuth();
     
     // Initialize XSS Configuration
     initializeXSSConfig();
