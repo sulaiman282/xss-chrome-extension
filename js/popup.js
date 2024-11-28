@@ -3,6 +3,7 @@ import { initializeRequestConfig } from './modules/request.js';
 import { initializeXSSConfig, loadXSSPayloads } from './modules/xss.js';
 import { initializeClipboardPaste } from './modules/clipboard.js';
 import { initializeProfileManagement } from './modules/profiles.js';
+import { initializeBodyHandling } from './modules/body.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Initializing popup...');
@@ -16,6 +17,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize Request Configuration
     initializeRequestConfig();
+    
+    // Initialize Body Handling
+    initializeBodyHandling();
     
     // Initialize XSS Configuration
     initializeXSSConfig();
