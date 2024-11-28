@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AiXSS - XSS Vulnerability Tester</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="styles/popup.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100">
+    <div class="w-[600px] h-[800px] flex flex-col">
+        <!-- Header -->
+        <header class="bg-white shadow-sm p-4">
+            <div class="flex items-center justify-between">
+                <!-- Profile Selection -->
+                <div class="flex items-center space-x-2">
+                    <select id="profileSelect" class="form-select rounded-md border-gray-300">
+                        <option value="default">Default Profile</option>
+                    </select>
+                    <button id="addProfile" class="p-1 text-gray-600 hover:text-gray-800">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- HTTP Method Selection -->
+                <select id="httpMethod" class="form-select rounded-md border-gray-300">
+                    <option value="GET">GET</option>
+                    <option value="POST">POST</option>
+                    <option value="PUT">PUT</option>
+                    <option value="DELETE">DELETE</option>
+                </select>
+            </div>
+
+            <!-- URL Input and Paste Button -->
+            <div class="mt-4 flex space-x-2">
+                <input type="text" id="urlInput" placeholder="Enter URL" class="flex-1 form-input rounded-md border-gray-300">
+                <button id="pasteClipboard" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                    Paste from Clipboard
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-hidden">
+            <!-- Tabs -->
+            <div class="bg-white border-b">
+                <nav class="flex space-x-4 px-4">
+                    <button class="tab-button active" data-tab="params">Params</button>
+                    <button class="tab-button" data-tab="auth">Authorization</button>
+                    <button class="tab-button" data-tab="headers">Headers</button>
+                    <button class="tab-button" data-tab="body">Body</button>
+                    <button class="tab-button" data-tab="xssconfig">XSS Config</button>
+                    <button class="tab-button" data-tab="results">Test Results</button>
+                </nav>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="p-4 h-full overflow-y-auto">
+                <!-- Params Tab -->
+                <div id="paramsTab" class="tab-content active">
+                    <div id="paramsContainer" class="space-y-2"></div>
+                    <button class="mt-2 px-4 py-2 text-sm text-blue-600 hover:text-blue-800" onclick="addParam()">
+                        + Add Parameter
+                    </button>
+                </div>
+
+                <!-- Auth Tab -->
+                <div id="authTab" class="tab-content hidden">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Authorization Type</label>
+                        <select id="authType" class="form-select w-full mb-2">
+                            <option value="none">No Auth</option>
+                            <option value="basic">Basic Auth</option>
+                            <option value="bearer">Bearer Token</option>
+                            <option value="apiKey">API Key</option>
+                            <option value="oauth2">OAuth 2.0</option>
+                        </select>
+                        
+                        <!-- Auth Input Fields - shown/hidden based on auth type -->
+                        <div id="authFields" class="mt-2">
+                            <!-- Basic Auth -->
+                            <div id="basicAuthFields" class="auth-field-group hidden">
+                                <input type="text" class="form-input w-full mb-2" id="basicUsername" placeholder="Username">
+                                <input type="password" class="form-input w-full" id="basicPassword" placeholder="Password">
+                            </div>
+                            
+                            <!-- Bearer Token -->
+                            <div id="bearerTokenField" class="auth-field-group hidden">
+                                <input type="text" class="form-input w-full" id="bearerToken" placeholder="Bearer Token">
+                            </div>
+                            
+                            <!-- API Key -->
+                            <div id="apiKeyFields" class="auth-field-group hidden">
+                                <input type="text" class="form-input w-full mb-2" id="apiKeyName" placeholder="Key Name">
+                                <input type="text" class="form-input w-full" id="apiKeyValue" placeholder="Key Value">
+                                <select class="form-select w-full mt-2" id="apiKeyLocation">
+                                    <option value="header">Header</option>
+                                    <option value="query">Query Parameter</option>
+                                </select>
+                            </div>
+                            
+                            <!-- OAuth 2.0 -->
+                            <div id="oauth2Fields" class="auth-field-group hidden">
+                                <input type="text" class="form-input w-full mb-2" id="oauth2Token" placeholder="Access Token">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Headers Tab -->
+                <div id="headersTab" class="tab-content hidden">
+                    <div id="headersContainer" class="space-y-2"></div>
+                    <button class="mt-2 px-4 py-2 text-sm text-blue-600 hover:text-blue-800" onclick="addHeader()">
+                        + Add Header
+                    </button>
+                </div>
+
+                <!-- Body Tab -->
+                <div id="bodyTab" class="tab-content hidden">
+                    <select id="bodyType" class="form-select w-full mb-4">
+                        <option value="raw">Raw</option>
+                        <option value="multipart">Multipart Form-data</option>
+                    </select>
+                    <div id="bodyContent"></div>
+                </div>
+
+                <!-- XSS Config Tab -->
+                <div id="xssconfigTab" class="tab-content hidden">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Target Field</label>
+                            <select id="xssTargetField" class="form-select w-full">
+                                <option value="">Select a field to test</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Payload Type</label>
+                            <select id="xssPayloadType" class="form-select w-full">
+                                <option value="basic.txt">Basic XSS</option>
+                                <option value="medium.txt">Medium XSS</option>
+                                <option value="advance.txt">Advanced XSS</option>
+                            </select>
+                        </div>
+                        <div id="xssValidationMessage" class="text-red-500 text-sm hidden">
+                            Please select both a target field and payload type before starting the test.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Tab -->
+                <div id="resultsTab" class="tab-content hidden">
+                    <div class="flex space-x-4 mb-4">
+                        <button class="tab-button active" data-results-tab="current">Current Responses</button>
+                        <button class="tab-button" data-results-tab="matched">Matched List</button>
+                    </div>
+                    <div id="currentResponses" class="results-content active"></div>
+                    <div id="matchedList" class="results-content hidden">
+                        <button id="downloadResults" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
+                            Download Results
+                        </button>
+                        <div id="matchedPayloads" class="mt-4"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="bg-white border-t p-4">
+            <div class="flex justify-between items-center">
+                <div class="flex space-x-4 text-sm">
+                    <span>Total: <span id="totalCount">0</span></span>
+                    <span>Checked: <span id="checkedCount">0</span></span>
+                    <span>Matched: <span id="matchedCount">0</span></span>
+                    <span>Not Matched: <span id="notMatchedCount">0</span></span>
+                </div>
+                <button id="startTest" class="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
+                    Start Test
+                </button>
+            </div>
+        </footer>
+    </div>
+    <script src="js/popup.js"></script>
+</body>
+</html>

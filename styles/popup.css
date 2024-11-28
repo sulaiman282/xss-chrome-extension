@@ -1,0 +1,95 @@
+/* General Styles */
+body {
+    width: 700px;
+    height: 800px;
+    background-color: #F3F4F6;
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Tab Styles */
+.tab-button {
+    padding: 0.75rem 1rem;
+    color: #4B5563;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+.tab-button:hover {
+    color: #1F2937;
+}
+
+.tab-button.active {
+    color: #2563EB;
+    border-bottom-color: #2563EB;
+}
+
+/* Form Controls */
+.form-input, .form-select {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #D1D5DB;
+    border-radius: 0.375rem;
+    outline: none;
+}
+
+.form-input:focus, .form-select:focus {
+    border-color: #2563EB;
+    ring: 2px solid rgba(37, 99, 235, 0.2);
+}
+
+/* Key-Value Pair Rows */
+.key-value-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.delete-btn {
+    padding: 0.25rem;
+    color: #EF4444;
+    border-radius: 0.25rem;
+    transition: all 0.2s;
+}
+
+.delete-btn:hover {
+    background-color: #FEE2E2;
+}
+
+/* Results Section */
+.results-content {
+    display: none;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.results-content.active {
+    display: block;
+}
+
+/* Response Items */
+.response-item {
+    padding: 1rem;
+    margin-bottom: 0.5rem;
+    background-color: white;
+    border: 1px solid #E5E7EB;
+    border-radius: 0.5rem;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #F3F4F6;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #D1D5DB;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #9CA3AF;
+}

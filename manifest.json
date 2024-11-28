@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "AiXSS - XSS Vulnerability Tester",
+  "version": "1.0",
+  "description": "A powerful XSS vulnerability testing tool with a modern, Postman-like interface",
+  "permissions": [
+    "clipboardRead",
+    "storage",
+    "activeTab"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
+  },
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  }
+}
