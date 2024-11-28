@@ -10,22 +10,27 @@ function createFormField(container) {
     keyInput.className = 'form-input rounded-md border-gray-300 w-full col-span-3';
 
     // Value input (6 columns)
-    const valueInput = document.createElement('input');
+    let valueWrapper = document.createElement('div');
+    valueWrapper.className = 'col-span-6';
+    let valueInput = document.createElement('input');
     valueInput.type = 'text';
     valueInput.placeholder = 'Value';
-    valueInput.className = 'form-input rounded-md border-gray-300 w-full col-span-6';
+    valueInput.className = 'form-input rounded-md border-gray-300 w-full';
+    valueWrapper.appendChild(valueInput);
 
     // Type select (2 columns)
     const typeSelect = document.createElement('select');
     typeSelect.className = 'form-select rounded-md border-gray-300 w-full col-span-2';
-    
+
     const textOption = document.createElement('option');
     textOption.value = 'text';
     textOption.textContent = 'Text';
-    
+
+
     const fileOption = document.createElement('option');
     fileOption.value = 'file';
     fileOption.textContent = 'File';
+
 
     typeSelect.appendChild(textOption);
     typeSelect.appendChild(fileOption);
@@ -38,26 +43,26 @@ function createFormField(container) {
 
     // Add event listener for type change
     typeSelect.addEventListener('change', (e) => {
-        const oldValue = valueInput.value; // Store the current value
+        const oldValue = valueInput.value;
         const isFileType = e.target.value === 'file';
         const newValueInput = document.createElement('input');
-        
+
         if (isFileType) {
             newValueInput.type = 'file';
-            newValueInput.className = 'form-input rounded-md border-gray-300 w-full col-span-6';
+            newValueInput.className = 'form-input rounded-md border-gray-300 w-full';
         } else {
             newValueInput.type = 'text';
             newValueInput.placeholder = 'Value';
-            newValueInput.className = 'form-input rounded-md border-gray-300 w-full col-span-6';
-            newValueInput.value = oldValue; // Restore the value if switching back to text
+            newValueInput.className = 'form-input rounded-md border-gray-300 w-full';
+            newValueInput.value = oldValue;
         }
 
         valueInput.replaceWith(newValueInput);
-        valueInput = newValueInput; // Update the reference
+        valueInput = newValueInput;
     });
 
     fieldDiv.appendChild(keyInput);
-    fieldDiv.appendChild(valueInput);
+    fieldDiv.appendChild(valueWrapper);
     fieldDiv.appendChild(typeSelect);
     fieldDiv.appendChild(removeBtn);
 
@@ -80,7 +85,7 @@ export function initializeBodyHandling() {
         const bodyContents = document.querySelectorAll('.body-content');
         bodyContents.forEach(content => content.classList.add('hidden'));
 
-        switch(e.target.value) {
+        switch (e.target.value) {
             case 'raw':
                 rawBody.classList.remove('hidden');
                 break;
@@ -105,15 +110,16 @@ export function initializeBodyHandling() {
 // Function to get body data based on type
 export function getBodyData() {
     const bodyType = document.getElementById('bodyType').value;
-    
-    switch(bodyType) {
+
+    switch (bodyType) {
         case 'raw':
             return document.getElementById('bodyContent').value;
-            
+
         case 'form-data':
             const formData = new FormData();
             document.querySelectorAll('#formDataContainer > div').forEach(field => {
-                const [key, value, type] = field.children;
+                const [key, valueWrapper, type] = field.children;
+                const value = valueWrapper.children[0];
                 if (type.value === 'file' && value.files.length > 0) {
                     formData.append(key.value, value.files[0]);
                 } else {
@@ -121,15 +127,16 @@ export function getBodyData() {
                 }
             });
             return formData;
-            
+
         case 'x-www-form-urlencoded':
             const params = new URLSearchParams();
             document.querySelectorAll('#urlencodedContainer > div').forEach(field => {
-                const [key, value] = field.children;
+                const [key, valueWrapper] = field.children;
+                const value = valueWrapper.children[0];
                 params.append(key.value, value.value);
             });
             return params.toString();
     }
-    
+
     return null;
 }
