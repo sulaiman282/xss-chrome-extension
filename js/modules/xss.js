@@ -10,6 +10,9 @@ export function initializeXSSConfig() {
     const progressContainer = document.getElementById('progressContainer');
 
     if (valueType && valueSelect && xssLevel && startTestBtn) {
+        // Set default XSS level to Basic
+        xssLevel.value = 'basic';
+        
         // Handle value type change
         valueType.addEventListener('change', () => {
             const state = getState();
@@ -88,9 +91,7 @@ export function initializeXSSConfig() {
 }
 
 function validateXssConfig() {
-    const valueType = document.getElementById('valueType').value;
     const valueSelect = document.getElementById('valueSelect').value;
-    const xssLevel = document.getElementById('xssLevel').value;
     const startButton = document.getElementById('startTest');
     
     // Add validation message containers if they don't exist
@@ -99,16 +100,17 @@ function validateXssConfig() {
         messageContainer = document.createElement('div');
         messageContainer.id = 'xssValidationMessage';
         messageContainer.className = 'text-red-500 text-sm mt-2';
-        document.getElementById('xssconfigTab').querySelector('.space-y-4').appendChild(messageContainer);
+        document.getElementById('valueSelect').parentNode.appendChild(messageContainer);
     }
-
-    // Validate all fields
-    if (!valueType || !valueSelect || !xssLevel) {
+    
+    // Only validate value selection
+    if (!valueSelect) {
+        messageContainer.textContent = 'Please select a value to test';
         startButton.disabled = true;
-        messageContainer.textContent = 'Please fill in all required fields';
         return false;
     }
-
+    
+    // Clear validation message if all required fields are filled
     messageContainer.textContent = '';
     startButton.disabled = false;
     return true;
