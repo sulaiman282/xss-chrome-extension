@@ -128,36 +128,62 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function getParamValues(profile) {
     const values = [];
-    if (profile.params) {
-        for (const [key, value] of profile.params) {
+    if (profile.params && typeof profile.params === 'object') {
+        // Convert object entries to array of {key, value} pairs
+        Object.entries(profile.params).forEach(([key, value]) => {
             values.push({ key, value });
-        }
+        });
     }
     return values;
 }
 
 function getBodyValues(profile) {
     const values = [];
+    const bodyType = document.getElementById('bodyType')?.value;
+
     if (profile.body) {
-        if (typeof profile.body === 'object') {
-            // For JSON and form data
-            for (const [key, value] of Object.entries(profile.body)) {
-                values.push({ key, value });
+        if (bodyType === 'form-data' || bodyType === 'x-www-form-urlencoded') {
+            // For form data, use the formData object
+            if (profile.formData && typeof profile.formData === 'object') {
+                Object.entries(profile.formData).forEach(([key, value]) => {
+                    values.push({ key, value: value === null ? '' : value });
+                });
             }
-        } else {
-            // For raw body, split by common separators
-            const pairs = profile.body.split(/[&\n]/);
-            pairs.forEach(pair => {
-                const [key, value] = pair.split('=');
-                if (key && value) {
-                    values.push({ 
-                        key: key.trim(), 
-                        value: value.trim() 
-                    });
-                }
+        } else if (bodyType === 'raw' && typeof profile.body === 'object') {
+            // For JSON objects, flatten them into key-value pairs
+            Object.entries(profile.body).forEach(([key, value]) => {
+                values.push({ 
+                    key, 
+                    value: typeof value === 'object' ? JSON.stringify(value) : value 
+                });
             });
+        } else if (bodyType === 'raw') {
+            // For raw string body, split by common separators
+            try {
+                // Try parsing as JSON first
+                const jsonBody = JSON.parse(profile.body);
+                Object.entries(jsonBody).forEach(([key, value]) => {
+                    values.push({ 
+                        key, 
+                        value: typeof value === 'object' ? JSON.stringify(value) : value 
+                    });
+                });
+            } catch {
+                // If not JSON, split by common separators
+                const pairs = profile.body.split(/[&\n]/);
+                pairs.forEach(pair => {
+                    const [key, value] = pair.split('=');
+                    if (key && value) {
+                        values.push({ 
+                            key: key.trim(), 
+                            value: value.trim() 
+                        });
+                    }
+                });
+            }
         }
     }
+    
     return values;
 }
 
