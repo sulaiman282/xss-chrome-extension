@@ -37,19 +37,18 @@ export function initializeXSSConfig() {
                 });
             }
             
-            updateStartButton();
+            validateXssConfig();
         });
 
         // Handle value selection change
-        valueSelect.addEventListener('change', updateStartButton);
+        valueSelect.addEventListener('change', validateXssConfig);
 
         // Handle XSS level change
-        xssLevel.addEventListener('change', updateStartButton);
+        xssLevel.addEventListener('change', validateXssConfig);
 
         // Handle start test button
         startTestBtn.addEventListener('click', async () => {
-            if (!valueType.value || !valueSelect.value || !xssLevel.value) {
-                console.error('Please select all required fields');
+            if (!validateXssConfig()) {
                 return;
             }
             
@@ -88,16 +87,42 @@ export function initializeXSSConfig() {
     }
 }
 
-function updateStartButton() {
-    const valueType = document.getElementById('valueType');
-    const valueSelect = document.getElementById('valueSelect');
-    const xssLevel = document.getElementById('xssLevel');
-    const startTestBtn = document.getElementById('startTest');
-
-    if (valueType && valueSelect && xssLevel && startTestBtn) {
-        startTestBtn.disabled = !(valueType.value && valueSelect.value && xssLevel.value);
+function validateXssConfig() {
+    const valueType = document.getElementById('valueType').value;
+    const valueSelect = document.getElementById('valueSelect').value;
+    const xssLevel = document.getElementById('xssLevel').value;
+    const startButton = document.getElementById('startTest');
+    
+    // Add validation message containers if they don't exist
+    let messageContainer = document.getElementById('xssValidationMessage');
+    if (!messageContainer) {
+        messageContainer = document.createElement('div');
+        messageContainer.id = 'xssValidationMessage';
+        messageContainer.className = 'text-red-500 text-sm mt-2';
+        document.getElementById('xssconfigTab').querySelector('.space-y-4').appendChild(messageContainer);
     }
+
+    // Validate all fields
+    if (!valueType || !valueSelect || !xssLevel) {
+        startButton.disabled = true;
+        messageContainer.textContent = 'Please fill in all required fields';
+        return false;
+    }
+
+    messageContainer.textContent = '';
+    startButton.disabled = false;
+    return true;
 }
+
+// Add event listeners for validation
+document.getElementById('valueType')?.addEventListener('change', validateXssConfig);
+document.getElementById('valueSelect')?.addEventListener('change', validateXssConfig);
+document.getElementById('xssLevel')?.addEventListener('change', validateXssConfig);
+
+// Initial validation
+document.addEventListener('DOMContentLoaded', () => {
+    validateXssConfig();
+});
 
 function getParamValues(profile) {
     const values = [];
@@ -132,6 +157,58 @@ function getBodyValues(profile) {
         }
     }
     return values;
+}
+
+// Update value selection based on type
+document.getElementById('valueType')?.addEventListener('change', function() {
+    const valueSelect = document.getElementById('valueSelect');
+    valueSelect.disabled = !this.value;
+    valueSelect.innerHTML = '<option value="">Select Value</option>';
+    
+    if (this.value === 'params') {
+        // Populate with URL parameters
+        const urlParams = new URL(document.getElementById('url').value).searchParams;
+        for (const [key] of urlParams) {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = key;
+            valueSelect.appendChild(option);
+        }
+    } else if (this.value === 'body') {
+        // Populate with body fields
+        const bodyFields = getBodyFields();
+        bodyFields.forEach(field => {
+            const option = document.createElement('option');
+            option.value = field;
+            option.textContent = field;
+            valueSelect.appendChild(option);
+        });
+    }
+});
+
+function getBodyFields() {
+    const fields = new Set();
+    const method = document.getElementById('method').value;
+    
+    if (['POST', 'PUT', 'PATCH'].includes(method)) {
+        // Get fields from form data
+        const formDataContainer = document.getElementById('formDataContainer');
+        if (formDataContainer) {
+            formDataContainer.querySelectorAll('input[data-key]').forEach(input => {
+                fields.add(input.getAttribute('data-key'));
+            });
+        }
+        
+        // Get fields from urlencoded
+        const urlencodedContainer = document.getElementById('urlencodedContainer');
+        if (urlencodedContainer) {
+            urlencodedContainer.querySelectorAll('input[data-key]').forEach(input => {
+                fields.add(input.getAttribute('data-key'));
+            });
+        }
+    }
+    
+    return Array.from(fields);
 }
 
 export async function loadXSSPayloads() {
