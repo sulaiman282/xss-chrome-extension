@@ -36,10 +36,37 @@ export function initializeClipboardPaste() {
             }
             updateMethod(profile.method);
             
-            // Update headers if valid
+            // Update headers and handle Authorization
             if (curlData.headers && Object.keys(curlData.headers).length > 0) {
-                profile.headers = curlData.headers;
-                updateHeadersUI(curlData.headers);
+                const headers = { ...curlData.headers };
+                
+                // Handle Authorization header
+                const authHeader = headers['Authorization'] || headers['authorization'];
+                if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
+                    // Set bearer token auth
+                    const token = authHeader.substring(7).trim();
+                    profile.auth = {
+                        type: 'bearer',
+                        token: token
+                    };
+                    
+                    // Update UI
+                    const authType = document.getElementById('authType');
+                    const bearerToken = document.getElementById('bearerToken');
+                    if (authType && bearerToken) {
+                        authType.value = 'bearer';
+                        bearerToken.value = token;
+                        // Trigger change event to show bearer token input
+                        authType.dispatchEvent(new Event('change'));
+                    }
+                    
+                    // Remove Authorization header
+                    delete headers['Authorization'];
+                    delete headers['authorization'];
+                }
+                
+                profile.headers = headers;
+                updateHeadersUI(headers);
             }
             
             // Update body if present and valid
@@ -131,6 +158,9 @@ function updateBodyUI(curlData) {
             if (formDataBody) formDataBody.classList.add('hidden');
             if (urlencodedBody) urlencodedBody.classList.add('hidden');
         }
+        
+        // Trigger change event
+        bodyTypeSelect.dispatchEvent(new Event('change'));
     } catch (error) {
         console.error('Error updating body UI:', error);
     }
