@@ -128,13 +128,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function getParamValues(profile) {
     const values = [];
+    
+    // Get values from profile.params
     if (profile.params && typeof profile.params === 'object') {
-        // Convert object entries to array of {key, value} pairs
         Object.entries(profile.params).forEach(([key, value]) => {
             values.push({ key, value });
         });
     }
-    return values;
+    
+    // Get values from UI params container
+    const paramsContainer = document.getElementById('paramsContainer');
+    if (paramsContainer) {
+        paramsContainer.querySelectorAll('div').forEach(field => {
+            const keyInput = field.querySelector('input[type="text"]');
+            const valueInput = field.querySelector('div input'); // Get value input
+            if (keyInput && keyInput.value && valueInput) {
+                values.push({ 
+                    key: keyInput.value, 
+                    value: valueInput.value 
+                });
+            }
+        });
+    }
+    
+    // Remove duplicates based on key
+    const uniqueValues = values.reduce((acc, current) => {
+        const x = acc.find(item => item.key === current.key);
+        if (!x) {
+            return acc.concat([current]);
+        } else {
+            return acc;
+        }
+    }, []);
+    
+    return uniqueValues;
 }
 
 function getBodyValues(profile) {

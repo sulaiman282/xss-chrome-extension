@@ -8,6 +8,10 @@ function createFormField(container) {
     keyInput.type = 'text';
     keyInput.placeholder = 'Key';
     keyInput.className = 'form-input rounded-md border-gray-300 w-full col-span-3';
+    // Add input event listener for key changes
+    keyInput.addEventListener('input', () => {
+        document.dispatchEvent(new Event('fieldsUpdated'));
+    });
 
     // Value input (6 columns)
     let valueWrapper = document.createElement('div');
@@ -16,6 +20,10 @@ function createFormField(container) {
     valueInput.type = 'text';
     valueInput.placeholder = 'Value';
     valueInput.className = 'form-input rounded-md border-gray-300 w-full';
+    // Add input event listener for value changes
+    valueInput.addEventListener('input', () => {
+        document.dispatchEvent(new Event('fieldsUpdated'));
+    });
     valueWrapper.appendChild(valueInput);
 
     // Type select (2 columns)
@@ -26,11 +34,9 @@ function createFormField(container) {
     textOption.value = 'text';
     textOption.textContent = 'Text';
 
-
     const fileOption = document.createElement('option');
     fileOption.value = 'file';
     fileOption.textContent = 'File';
-
 
     typeSelect.appendChild(textOption);
     typeSelect.appendChild(fileOption);
@@ -39,7 +45,10 @@ function createFormField(container) {
     const removeBtn = document.createElement('button');
     removeBtn.className = 'text-red-600 hover:text-red-800 col-span-1 flex items-center justify-center';
     removeBtn.innerHTML = '×';
-    removeBtn.onclick = () => fieldDiv.remove();
+    removeBtn.onclick = () => {
+        fieldDiv.remove();
+        document.dispatchEvent(new Event('fieldsUpdated'));
+    };
 
     // Add event listener for type change
     typeSelect.addEventListener('change', (e) => {
@@ -57,8 +66,14 @@ function createFormField(container) {
             newValueInput.value = oldValue;
         }
 
+        // Add input event listener for new value input
+        newValueInput.addEventListener('input', () => {
+            document.dispatchEvent(new Event('fieldsUpdated'));
+        });
+
         valueInput.replaceWith(newValueInput);
         valueInput = newValueInput;
+        document.dispatchEvent(new Event('fieldsUpdated'));
     });
 
     fieldDiv.appendChild(keyInput);
@@ -67,6 +82,8 @@ function createFormField(container) {
     fieldDiv.appendChild(removeBtn);
 
     container.appendChild(fieldDiv);
+    // Trigger update when new field is added
+    document.dispatchEvent(new Event('fieldsUpdated'));
 }
 
 // Function to get all available target fields
@@ -75,16 +92,19 @@ export function getTargetFields() {
     const bodyType = document.getElementById('bodyType').value;
 
     // Get params fields
-    document.querySelectorAll('#paramsContainer > div').forEach(field => {
-        const [key] = field.children;
-        if (key.value) {
-            fields.push({
-                name: key.value,
-                type: 'param',
-                label: `Param: ${key.value}`
-            });
-        }
-    });
+    const paramsContainer = document.getElementById('paramsContainer');
+    if (paramsContainer) {
+        paramsContainer.querySelectorAll('div').forEach(field => {
+            const keyInput = field.querySelector('input[type="text"]');
+            if (keyInput && keyInput.value) {
+                fields.push({
+                    name: keyInput.value,
+                    type: 'param',
+                    label: `Param: ${keyInput.value}`
+                });
+            }
+        });
+    }
 
     // Get body fields based on type
     switch(bodyType) {
@@ -107,12 +127,12 @@ export function getTargetFields() {
 
         case 'form-data':
             document.querySelectorAll('#formDataContainer > div').forEach(field => {
-                const [key, valueWrapper, type] = field.children;
-                if (key.value) {
+                const keyInput = field.querySelector('input[type="text"]');
+                if (keyInput && keyInput.value) {
                     fields.push({
-                        name: key.value,
+                        name: keyInput.value,
                         type: 'form-data',
-                        label: `Form Data: ${key.value}`
+                        label: `Form Data: ${keyInput.value}`
                     });
                 }
             });
@@ -120,12 +140,12 @@ export function getTargetFields() {
 
         case 'x-www-form-urlencoded':
             document.querySelectorAll('#urlencodedContainer > div').forEach(field => {
-                const [key] = field.children;
-                if (key.value) {
+                const keyInput = field.querySelector('input[type="text"]');
+                if (keyInput && keyInput.value) {
                     fields.push({
-                        name: key.value,
+                        name: keyInput.value,
                         type: 'urlencoded',
-                        label: `Form URL: ${key.value}`
+                        label: `Form URL: ${keyInput.value}`
                     });
                 }
             });
@@ -184,6 +204,8 @@ export function initializeBodyHandling() {
                 urlencodedBody.classList.remove('hidden');
                 break;
         }
+        // Trigger update when body type changes
+        document.dispatchEvent(new Event('fieldsUpdated'));
     });
 
     // Add form field buttons
@@ -193,6 +215,12 @@ export function initializeBodyHandling() {
     // Add initial fields
     createFormField(formDataContainer);
     createFormField(urlencodedContainer);
+
+    // Listen for field updates to refresh XSS config options
+    document.addEventListener('fieldsUpdated', () => {
+        // This will trigger a refresh of the XSS config dropdown
+        document.dispatchEvent(new Event('bodyUpdated'));
+    });
 }
 
 // Function to get body data based on type
