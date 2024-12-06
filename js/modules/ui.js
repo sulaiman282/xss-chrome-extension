@@ -1,5 +1,5 @@
 // UI Module
-import { updateProfile } from './profiles.js';
+import { saveTabData } from './profiles.js';
 
 export function initializeTabs() {
     const tabs = document.querySelectorAll('.tab-button');
@@ -21,6 +21,7 @@ export function initializeTabs() {
             // Update content visibility
             contents.forEach(content => {
                 content.classList.add('hidden');
+                content.classList.remove('active');
             });
 
             const activeContent = document.getElementById(`${target}Tab`);
@@ -34,7 +35,7 @@ export function initializeTabs() {
 
 export function initializeKeyValuePairs() {
     // Headers
-    const addHeaderBtn = document.querySelector('#headersTab button');
+    const addHeaderBtn = document.querySelector('#headersTab [data-action="add"]');
     if (addHeaderBtn) {
         addHeaderBtn.addEventListener('click', () => {
             console.log('Adding header pair');
@@ -43,13 +44,23 @@ export function initializeKeyValuePairs() {
     }
 
     // Params
-    const addParamBtn = document.querySelector('#paramsTab button');
+    const addParamBtn = document.querySelector('#paramsTab [data-action="add"]');
     if (addParamBtn) {
         addParamBtn.addEventListener('click', () => {
             console.log('Adding param pair');
             addKeyValuePair('params');
         });
     }
+
+    // Initialize existing rows
+    document.querySelectorAll('.key-value-row input').forEach(input => {
+        input.addEventListener('change', () => {
+            const row = input.closest('.key-value-row');
+            const container = row.closest('[id$="Container"]');
+            const type = container.id.replace('Container', '');
+            saveTabData(type);
+        });
+    });
 }
 
 function addKeyValuePair(type) {
@@ -65,24 +76,24 @@ function addKeyValuePair(type) {
     // Add event listeners for inputs
     row.querySelectorAll('input').forEach(input => {
         input.addEventListener('change', () => {
-            updateProfile(type);
+            saveTabData(type);
         });
     });
 }
 
 export function createKeyValueRow(type, key = '', value = '', isFile = false) {
     const row = document.createElement('div');
-    row.className = 'flex space-x-2 items-center mb-2';
+    row.className = 'key-value-row flex space-x-2 items-center mb-2';
     
     const keyInput = document.createElement('input');
     keyInput.type = 'text';
-    keyInput.className = 'form-input rounded-md border-gray-300 flex-1';
+    keyInput.className = 'key-input form-input rounded-md border-gray-300 flex-1';
     keyInput.placeholder = 'Key';
     keyInput.value = key;
 
     const valueInput = document.createElement('input');
     valueInput.type = isFile ? 'file' : 'text';
-    valueInput.className = 'form-input rounded-md border-gray-300 flex-1';
+    valueInput.className = 'value-input form-input rounded-md border-gray-300 flex-1';
     valueInput.placeholder = 'Value';
     if (!isFile) valueInput.value = value;
 
@@ -91,7 +102,7 @@ export function createKeyValueRow(type, key = '', value = '', isFile = false) {
     deleteBtn.innerHTML = '×';
     deleteBtn.onclick = () => {
         row.remove();
-        updateProfile(type);
+        saveTabData(type);
     };
 
     row.appendChild(keyInput);
