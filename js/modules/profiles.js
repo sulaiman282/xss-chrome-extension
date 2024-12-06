@@ -19,15 +19,30 @@ function toggleBodyTab(method) {
     }
 }
 
+// Helper function to update delete button visibility
+function updateDeleteButtonVisibility() {
+    const deleteBtn = document.getElementById('deleteProfile');
+    const profileCount = Object.keys(state.profiles).length;
+    
+    if (profileCount <= 1) {
+        deleteBtn.classList.add('hidden');
+    } else {
+        deleteBtn.classList.remove('hidden');
+    }
+}
+
 export function initializeProfileManagement() {
     const profileSelect = document.getElementById('profileSelect');
     const addProfileBtn = document.getElementById('addProfile');
+    const renameProfileBtn = document.getElementById('renameProfile');
+    const deleteProfileBtn = document.getElementById('deleteProfile');
     const clearBtn = document.getElementById('clearBtn');
     const methodSelect = document.getElementById('httpMethod');
 
     // Load initial profile data
     loadProfilesIntoSelect(profileSelect);
     loadProfile(state.currentProfile);
+    updateDeleteButtonVisibility();
 
     // Method change handler
     methodSelect.addEventListener('change', (e) => {
@@ -50,7 +65,55 @@ export function initializeProfileManagement() {
             profileSelect.value = profileName;
             setCurrentProfile(profileName);
             loadProfile(profileName);
+            updateDeleteButtonVisibility();
             console.log('New profile created:', profileName);
+        }
+    });
+
+    // Rename profile
+    renameProfileBtn.addEventListener('click', () => {
+        const currentName = state.currentProfile;
+        const newName = prompt('Enter new profile name:', currentName);
+        
+        if (newName && newName !== currentName && !state.profiles[newName]) {
+            // Copy the profile with new name
+            const profiles = { ...state.profiles };
+            profiles[newName] = profiles[currentName];
+            delete profiles[currentName];
+            
+            // Update state
+            updateState({ ...state, profiles, currentProfile: newName });
+            
+            // Update select options
+            loadProfilesIntoSelect(profileSelect);
+            console.log('Profile renamed from', currentName, 'to', newName);
+        }
+    });
+
+    // Delete profile
+    deleteProfileBtn.addEventListener('click', () => {
+        const currentName = state.currentProfile;
+        const profileCount = Object.keys(state.profiles).length;
+        
+        if (profileCount <= 1) {
+            alert('Cannot delete the last profile');
+            return;
+        }
+        
+        if (confirm(`Are you sure you want to delete profile "${currentName}"?`)) {
+            // Get next profile name
+            const profiles = { ...state.profiles };
+            delete profiles[currentName];
+            const nextProfile = Object.keys(profiles)[0];
+            
+            // Update state
+            updateState({ ...state, profiles, currentProfile: nextProfile });
+            
+            // Update select options and load next profile
+            loadProfilesIntoSelect(profileSelect);
+            loadProfile(nextProfile);
+            updateDeleteButtonVisibility();
+            console.log('Profile deleted:', currentName);
         }
     });
 
