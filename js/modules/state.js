@@ -1,5 +1,5 @@
 // State Management Module
-export const state = loadStateFromStorage() || {
+export const state = {
     currentProfile: 'default',
     profiles: {
         default: {
@@ -28,13 +28,22 @@ export const state = loadStateFromStorage() || {
     }
 };
 
-function loadStateFromStorage() {
-    const savedState = sessionStorage.getItem('aixssState');
-    return savedState ? JSON.parse(savedState) : null;
+export function initializeState() {
+    return new Promise((resolve) => {
+        chrome.storage.local.get(['aixssState'], (result) => {
+            if (result.aixssState) {
+                Object.assign(state, result.aixssState);
+                console.log('Loaded state from storage:', state);
+            }
+            resolve(state);
+        });
+    });
 }
 
 function saveStateToStorage() {
-    sessionStorage.setItem('aixssState', JSON.stringify(state));
+    chrome.storage.local.set({ 'aixssState': state }, () => {
+        console.log('State saved to storage:', state);
+    });
 }
 
 export const getState = () => state;
