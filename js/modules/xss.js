@@ -33,29 +33,16 @@ export function initializeXSSConfig() {
         });
 
         // Handle start test button
-        startTestBtn.addEventListener('click', async () => {
-            if (!validateXssConfig()) {
+        startTestBtn.addEventListener('click', () => {
+            const validationErrors = validateBeforeStart();
+            
+            if (validationErrors.length > 0) {
+                showValidationPopup(validationErrors);
                 return;
             }
             
-            startTestBtn.textContent = 'Testing...';
-            startTestBtn.disabled = true;
-            
-            if (progressContainer) {
-                progressContainer.classList.remove('hidden');
-            }
-            
-            try {
-                await executeXSSTest();
-            } catch (error) {
-                console.error('Error during XSS test:', error);
-            } finally {
-                startTestBtn.textContent = 'Start Test';
-                startTestBtn.disabled = false;
-                if (progressContainer) {
-                    progressContainer.classList.add('hidden');
-                }
-            }
+            // Proceed with XSS test if validation passes
+            startXSSTest();
         });
 
         // Listen for real-time updates to params and body
@@ -305,29 +292,157 @@ function flattenObject(obj, prefix = '') {
     }, {});
 }
 
-function validateXssConfig() {
-    const valueType = document.getElementById('valueType').value;
-    const valueSelect = document.getElementById('valueSelect').value;
-    const startButton = document.getElementById('startTest');
-    
-    // Add validation message containers if they don't exist
-    let messageContainer = document.getElementById('xssValidationMessage');
-    if (!messageContainer) {
-        messageContainer = document.createElement('div');
-        messageContainer.id = 'xssValidationMessage';
-        messageContainer.className = 'text-red-600 text-sm mt-2';
-        document.getElementById('xssconfig')?.appendChild(messageContainer);
-    }
-    
-    if (!valueType || !valueSelect) {
-        messageContainer.textContent = 'Please select both value type and target field';
-        startButton.disabled = true;
+function validateBeforeStart() {
+    const profile = state.profiles[state.currentProfile];
+    const validationItems = [
+        {
+            name: 'URL',
+            status: profile.url && profile.url.trim() && isValidUrl(profile.url),
+            message: 'A valid target URL is required'
+        },
+        {
+            name: 'HTTP Method',
+            status: !!profile.method,
+            message: 'HTTP Method must be selected'
+        },
+        {
+            name: 'Request Body',
+            status: !['POST', 'PUT', 'PATCH'].includes(profile.method) || 
+                   (profile.body && profile.body.type && (
+                       (profile.body.type === 'raw' && profile.body.content && profile.body.content.trim()) ||
+                       (['form-data', 'x-www-form-urlencoded'].includes(profile.body.type) && profile.body.fields && profile.body.fields.length > 0)
+                   )),
+            message: 'Request body is required for POST/PUT/PATCH methods'
+        },
+        {
+            name: 'XSS Configuration',
+            status: profile.xssConfig && profile.xssConfig.valueType && profile.xssConfig.targetField && profile.xssConfig.payloadType,
+            message: 'Complete XSS configuration is required (Value Type, Target Field, and XSS Level)'
+        }
+    ];
+
+    return validationItems.filter(item => !item.status);
+}
+
+function isValidUrl(string) {
+    try {
+        new URL(string);
+        return true;
+    } catch (_) {
         return false;
     }
+}
+
+function showValidationPopup(validationItems) {
+    // Create popup container
+    const popup = document.createElement('div');
+    popup.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    popup.id = 'validationPopup';
+
+    // Create popup content
+    const content = document.createElement('div');
+    content.className = 'bg-white rounded-lg p-6 max-w-md w-full mx-4 space-y-4';
+
+    // Add header
+    const header = document.createElement('div');
+    header.className = 'flex justify-between items-center';
+    header.innerHTML = `
+        <h3 class="text-lg font-medium text-gray-900">Required Items Missing</h3>
+        <button class="text-gray-400 hover:text-gray-500" id="closeValidationPopup">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </button>
+    `;
+
+    // Add checklist
+    const checklist = document.createElement('div');
+    checklist.className = 'space-y-3';
+    validationItems.forEach(item => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'flex items-start space-x-3';
+        itemDiv.innerHTML = `
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </div>
+            <div>
+                <p class="font-medium text-gray-900">${item.name}</p>
+                <p class="text-sm text-gray-500">${item.message}</p>
+            </div>
+        `;
+        checklist.appendChild(itemDiv);
+    });
+
+    // Add message
+    const message = document.createElement('p');
+    message.className = 'text-sm text-gray-500 mt-4';
+    message.textContent = 'Please provide all required information before starting the XSS test.';
+
+    // Add buttons
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = 'flex space-x-3 mt-5';
+
+    const configureButton = document.createElement('button');
+    configureButton.className = 'flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500';
+    configureButton.textContent = 'Configure Now';
+    configureButton.onclick = () => {
+        document.querySelector('[data-tab="xssconfig"]').click();
+        popup.remove();
+    };
+
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500';
+    cancelButton.textContent = 'Cancel';
+    cancelButton.onclick = () => popup.remove();
+
+    buttonContainer.appendChild(configureButton);
+    buttonContainer.appendChild(cancelButton);
+
+    // Assemble popup
+    content.appendChild(header);
+    content.appendChild(checklist);
+    content.appendChild(message);
+    content.appendChild(buttonContainer);
+    popup.appendChild(content);
+
+    // Add close functionality
+    popup.addEventListener('click', (e) => {
+        if (e.target === popup) {
+            popup.remove();
+        }
+    });
+
+    // Add to document
+    document.body.appendChild(popup);
+
+    // Setup close button
+    document.getElementById('closeValidationPopup').onclick = () => popup.remove();
+}
+
+async function startXSSTest() {
+    const startTestBtn = document.getElementById('startTest');
+    const progressContainer = document.getElementById('progressContainer');
+
+    startTestBtn.textContent = 'Testing...';
+    startTestBtn.disabled = true;
     
-    messageContainer.textContent = '';
-    startButton.disabled = false;
-    return true;
+    if (progressContainer) {
+        progressContainer.classList.remove('hidden');
+    }
+    
+    try {
+        await executeXSSTest();
+    } catch (error) {
+        console.error('Error during XSS test:', error);
+    } finally {
+        startTestBtn.textContent = 'Start Test';
+        startTestBtn.disabled = false;
+        if (progressContainer) {
+            progressContainer.classList.add('hidden');
+        }
+    }
 }
 
 export async function executeXSSTest() {
