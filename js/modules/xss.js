@@ -1,5 +1,5 @@
 // XSS Module
-import { getState, getProfile } from './state.js';
+import { state, updateProfile } from './state.js';
 import { sendRequest } from './request.js';
 
 export function initializeXSSConfig() {
@@ -10,44 +10,27 @@ export function initializeXSSConfig() {
     const progressContainer = document.getElementById('progressContainer');
 
     if (valueType && valueSelect && xssLevel && startTestBtn) {
-        // Set default XSS level to Basic
-        xssLevel.value = 'basic';
+        // Load initial config from profile
+        loadXSSConfig();
+
+        // Listen for profile changes
+        document.addEventListener('profileChanged', loadXSSConfig);
         
         // Handle value type change
         valueType.addEventListener('change', () => {
-            const state = getState();
-            const profile = getProfile(state.currentProfile);
-            
-            // Clear and disable value select
-            valueSelect.innerHTML = '<option value="">Select Value</option>';
-            valueSelect.disabled = !valueType.value;
-            
-            if (valueType.value) {
-                // Get available values based on value type
-                let values = [];
-                if (valueType.value === 'params') {
-                    values = getParamValues(profile);
-                } else if (valueType.value === 'body') {
-                    values = getBodyValues(profile);
-                }
-                
-                // Populate value select dropdown
-                values.forEach(({key, value}) => {
-                    const option = document.createElement('option');
-                    option.value = key;
-                    option.textContent = `${key} (${value})`;
-                    valueSelect.appendChild(option);
-                });
-            }
-            
-            validateXssConfig();
+            updateValueSelect();
+            saveXSSConfig();
         });
 
         // Handle value selection change
-        valueSelect.addEventListener('change', validateXssConfig);
+        valueSelect.addEventListener('change', () => {
+            saveXSSConfig();
+        });
 
         // Handle XSS level change
-        xssLevel.addEventListener('change', validateXssConfig);
+        xssLevel.addEventListener('change', () => {
+            saveXSSConfig();
+        });
 
         // Handle start test button
         startTestBtn.addEventListener('click', async () => {
@@ -75,22 +58,255 @@ export function initializeXSSConfig() {
             }
         });
 
-        // Listen for params and body updates to refresh value select options
+        // Listen for real-time updates to params and body
+        const paramsContainer = document.getElementById('paramsContainer');
+        if (paramsContainer) {
+            // Use MutationObserver to watch for changes in params
+            const paramsObserver = new MutationObserver(() => {
+                if (valueType.value === 'params') {
+                    updateValueSelect();
+                }
+            });
+            
+            paramsObserver.observe(paramsContainer, {
+                childList: true,
+                subtree: true,
+                characterData: true,
+                attributes: true
+            });
+
+            // Also listen for input events on param fields
+            paramsContainer.addEventListener('input', (event) => {
+                if (event.target.tagName === 'INPUT' && valueType.value === 'params') {
+                    updateValueSelect();
+                }
+            });
+        }
+
+        // Watch for body changes
+        const bodyContainer = document.getElementById('bodyTabContent');
+        if (bodyContainer) {
+            // Use MutationObserver to watch for changes in body
+            const bodyObserver = new MutationObserver(() => {
+                if (valueType.value === 'body') {
+                    updateValueSelect();
+                }
+            });
+            
+            bodyObserver.observe(bodyContainer, {
+                childList: true,
+                subtree: true,
+                characterData: true,
+                attributes: true
+            });
+
+            // Also listen for input events on body fields
+            bodyContainer.addEventListener('input', (event) => {
+                if (event.target.tagName === 'INPUT' && valueType.value === 'body') {
+                    updateValueSelect();
+                }
+            });
+
+            // Listen for changes in body type
+            document.getElementById('bodyType')?.addEventListener('change', () => {
+                if (valueType.value === 'body') {
+                    updateValueSelect();
+                }
+            });
+        }
+
+        // Listen for specific update events
         document.addEventListener('paramsUpdated', () => {
             if (valueType.value === 'params') {
-                valueType.dispatchEvent(new Event('change'));
+                updateValueSelect();
             }
         });
 
         document.addEventListener('bodyUpdated', () => {
             if (valueType.value === 'body') {
-                valueType.dispatchEvent(new Event('change'));
+                updateValueSelect();
             }
         });
     }
 }
 
+function loadXSSConfig() {
+    const profile = state.profiles[state.currentProfile];
+    if (!profile.xssConfig) {
+        profile.xssConfig = {
+            valueType: '',
+            targetField: '',
+            payloadType: 'basic'
+        };
+    }
+
+    const valueType = document.getElementById('valueType');
+    const valueSelect = document.getElementById('valueSelect');
+    const xssLevel = document.getElementById('xssLevel');
+
+    valueType.value = profile.xssConfig.valueType || '';
+    xssLevel.value = profile.xssConfig.payloadType || 'basic';
+
+    // Update value select options and set saved value
+    updateValueSelect();
+    if (profile.xssConfig.targetField) {
+        valueSelect.value = profile.xssConfig.targetField;
+    }
+}
+
+function saveXSSConfig() {
+    const profile = { ...state.profiles[state.currentProfile] };
+    const valueType = document.getElementById('valueType');
+    const valueSelect = document.getElementById('valueSelect');
+    const xssLevel = document.getElementById('xssLevel');
+
+    profile.xssConfig = {
+        valueType: valueType.value,
+        targetField: valueSelect.value,
+        payloadType: xssLevel.value
+    };
+
+    updateProfile(state.currentProfile, profile);
+}
+
+function updateValueSelect() {
+    const valueType = document.getElementById('valueType');
+    const valueSelect = document.getElementById('valueSelect');
+    const profile = state.profiles[state.currentProfile];
+    
+    // Store the currently selected value
+    const currentValue = valueSelect.value;
+    
+    // Clear and disable value select
+    valueSelect.innerHTML = '<option value="">Select Value</option>';
+    valueSelect.disabled = !valueType.value;
+    
+    if (!valueType.value) return;
+
+    // Get available values based on value type
+    const values = valueType.value === 'params' ? 
+        getParamValues() : 
+        getBodyValues();
+
+    // Populate value select dropdown with only value fields
+    values.forEach(value => {
+        const option = document.createElement('option');
+        option.value = value.key;
+        option.textContent = value.key;
+        valueSelect.appendChild(option);
+    });
+
+    // Restore the previously selected value if it still exists
+    if (currentValue && Array.from(valueSelect.options).some(opt => opt.value === currentValue)) {
+        valueSelect.value = currentValue;
+    } else {
+        // If the previously selected value no longer exists, trigger save to update profile
+        saveXSSConfig();
+    }
+}
+
+function getParamValues() {
+    const values = [];
+    const paramsContainer = document.getElementById('paramsContainer');
+    
+    if (paramsContainer) {
+        paramsContainer.querySelectorAll('div').forEach(field => {
+            const keyInput = field.querySelector('input[type="text"]');
+            const valueInput = field.querySelector('div input');
+            if (keyInput?.value && valueInput?.value && !isObjectOrArray(valueInput.value)) {
+                values.push({ 
+                    key: keyInput.value,
+                    value: valueInput.value 
+                });
+            }
+        });
+    }
+    
+    return values;
+}
+
+function getBodyValues() {
+    const values = [];
+    const bodyType = document.getElementById('bodyType')?.value;
+    const profile = state.profiles[state.currentProfile];
+
+    if (!profile.body) return values;
+
+    switch (bodyType) {
+        case 'form-data':
+        case 'x-www-form-urlencoded':
+            if (profile.body.fields) {
+                profile.body.fields.forEach(field => {
+                    if (field.key && field.value && !isObjectOrArray(field.value)) {
+                        values.push({
+                            key: field.key,
+                            value: field.value
+                        });
+                    }
+                });
+            }
+            break;
+            
+        case 'raw':
+            try {
+                const content = profile.body.content;
+                if (!content) break;
+                
+                // Try parsing as JSON
+                const jsonBody = JSON.parse(content);
+                const flattenedValues = flattenObject(jsonBody);
+                Object.entries(flattenedValues).forEach(([key, value]) => {
+                    if (!isObjectOrArray(value)) {
+                        values.push({ key, value });
+                    }
+                });
+            } catch {
+                // If not JSON, try parsing as URL encoded
+                const pairs = profile.body.content.split(/[&\n]/);
+                pairs.forEach(pair => {
+                    const [key, value] = pair.split('=');
+                    if (key && value && !isObjectOrArray(value)) {
+                        values.push({ 
+                            key: key.trim(),
+                            value: value.trim()
+                        });
+                    }
+                });
+            }
+            break;
+    }
+    
+    return values;
+}
+
+// Helper function to check if a value is an object or array
+function isObjectOrArray(value) {
+    if (typeof value === 'string') {
+        try {
+            const parsed = JSON.parse(value);
+            return typeof parsed === 'object' && parsed !== null;
+        } catch {
+            return false;
+        }
+    }
+    return typeof value === 'object' && value !== null;
+}
+
+// Helper function to flatten nested objects
+function flattenObject(obj, prefix = '') {
+    return Object.keys(obj).reduce((acc, key) => {
+        const pre = prefix.length ? prefix + '.' : '';
+        if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+            Object.assign(acc, flattenObject(obj[key], pre + key));
+        } else {
+            acc[pre + key] = obj[key];
+        }
+        return acc;
+    }, {});
+}
+
 function validateXssConfig() {
+    const valueType = document.getElementById('valueType').value;
     const valueSelect = document.getElementById('valueSelect').value;
     const startButton = document.getElementById('startTest');
     
@@ -99,213 +315,26 @@ function validateXssConfig() {
     if (!messageContainer) {
         messageContainer = document.createElement('div');
         messageContainer.id = 'xssValidationMessage';
-        messageContainer.className = 'text-red-500 text-sm mt-2';
-        document.getElementById('valueSelect').parentNode.appendChild(messageContainer);
+        messageContainer.className = 'text-red-600 text-sm mt-2';
+        document.getElementById('xssconfig')?.appendChild(messageContainer);
     }
     
-    // Only validate value selection
-    if (!valueSelect) {
-        messageContainer.textContent = 'Please select a value to test';
+    if (!valueType || !valueSelect) {
+        messageContainer.textContent = 'Please select both value type and target field';
         startButton.disabled = true;
         return false;
     }
     
-    // Clear validation message if all required fields are filled
     messageContainer.textContent = '';
     startButton.disabled = false;
     return true;
 }
 
-// Add event listeners for validation
-document.getElementById('valueType')?.addEventListener('change', validateXssConfig);
-document.getElementById('valueSelect')?.addEventListener('change', validateXssConfig);
-document.getElementById('xssLevel')?.addEventListener('change', validateXssConfig);
-
-// Initial validation
-document.addEventListener('DOMContentLoaded', () => {
-    validateXssConfig();
-});
-
-function getParamValues(profile) {
-    const values = [];
-    
-    // Get values from profile.params
-    if (profile.params && typeof profile.params === 'object') {
-        Object.entries(profile.params).forEach(([key, value]) => {
-            values.push({ key, value });
-        });
-    }
-    
-    // Get values from UI params container
-    const paramsContainer = document.getElementById('paramsContainer');
-    if (paramsContainer) {
-        paramsContainer.querySelectorAll('div').forEach(field => {
-            const keyInput = field.querySelector('input[type="text"]');
-            const valueInput = field.querySelector('div input'); // Get value input
-            if (keyInput && keyInput.value && valueInput) {
-                values.push({ 
-                    key: keyInput.value, 
-                    value: valueInput.value 
-                });
-            }
-        });
-    }
-    
-    // Remove duplicates based on key
-    const uniqueValues = values.reduce((acc, current) => {
-        const x = acc.find(item => item.key === current.key);
-        if (!x) {
-            return acc.concat([current]);
-        } else {
-            return acc;
-        }
-    }, []);
-    
-    return uniqueValues;
-}
-
-function getBodyValues(profile) {
-    const values = [];
-    const bodyType = document.getElementById('bodyType')?.value;
-
-    if (profile.body) {
-        if (bodyType === 'form-data' || bodyType === 'x-www-form-urlencoded') {
-            // For form data, use the formData object
-            if (profile.formData && typeof profile.formData === 'object') {
-                Object.entries(profile.formData).forEach(([key, value]) => {
-                    values.push({ key, value: value === null ? '' : value });
-                });
-            }
-        } else if (bodyType === 'raw' && typeof profile.body === 'object') {
-            // For JSON objects, flatten them into key-value pairs
-            Object.entries(profile.body).forEach(([key, value]) => {
-                values.push({ 
-                    key, 
-                    value: typeof value === 'object' ? JSON.stringify(value) : value 
-                });
-            });
-        } else if (bodyType === 'raw') {
-            // For raw string body, split by common separators
-            try {
-                // Try parsing as JSON first
-                const jsonBody = JSON.parse(profile.body);
-                Object.entries(jsonBody).forEach(([key, value]) => {
-                    values.push({ 
-                        key, 
-                        value: typeof value === 'object' ? JSON.stringify(value) : value 
-                    });
-                });
-            } catch {
-                // If not JSON, split by common separators
-                const pairs = profile.body.split(/[&\n]/);
-                pairs.forEach(pair => {
-                    const [key, value] = pair.split('=');
-                    if (key && value) {
-                        values.push({ 
-                            key: key.trim(), 
-                            value: value.trim() 
-                        });
-                    }
-                });
-            }
-        }
-    }
-    
-    return values;
-}
-
-// Update value selection based on type
-document.getElementById('valueType')?.addEventListener('change', function() {
-    const valueSelect = document.getElementById('valueSelect');
-    valueSelect.disabled = !this.value;
-    valueSelect.innerHTML = '<option value="">Select Value</option>';
-    
-    if (this.value === 'params') {
-        // Populate with URL parameters
-        const urlParams = new URL(document.getElementById('url').value).searchParams;
-        for (const [key] of urlParams) {
-            const option = document.createElement('option');
-            option.value = key;
-            option.textContent = key;
-            valueSelect.appendChild(option);
-        }
-    } else if (this.value === 'body') {
-        // Populate with body fields
-        const bodyFields = getBodyFields();
-        bodyFields.forEach(field => {
-            const option = document.createElement('option');
-            option.value = field;
-            option.textContent = field;
-            valueSelect.appendChild(option);
-        });
-    }
-});
-
-function getBodyFields() {
-    const fields = new Set();
-    const method = document.getElementById('method').value;
-    
-    if (['POST', 'PUT', 'PATCH'].includes(method)) {
-        // Get fields from form data
-        const formDataContainer = document.getElementById('formDataContainer');
-        if (formDataContainer) {
-            formDataContainer.querySelectorAll('input[data-key]').forEach(input => {
-                fields.add(input.getAttribute('data-key'));
-            });
-        }
-        
-        // Get fields from urlencoded
-        const urlencodedContainer = document.getElementById('urlencodedContainer');
-        if (urlencodedContainer) {
-            urlencodedContainer.querySelectorAll('input[data-key]').forEach(input => {
-                fields.add(input.getAttribute('data-key'));
-            });
-        }
-    }
-    
-    return Array.from(fields);
-}
-
-export async function loadXSSPayloads() {
-    const state = getState();
-    const profile = getProfile(state.currentProfile);
-    
-    try {
-        const response = await fetch(chrome.runtime.getURL(`../payloads/${profile.xssConfig.xssLevel}.txt`));
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const text = await response.text();
-        const payloads = text.split('\n').filter(line => line.trim());
-        
-        // Store payloads
-        state.xssPayloads[profile.xssConfig.xssLevel] = payloads;
-        
-        // Update total count
-        const totalCount = document.getElementById('totalCount');
-        const matchedCount = document.getElementById('matchedCount');
-        const progressBar = document.getElementById('progressBar');
-        
-        if (totalCount) totalCount.textContent = payloads.length;
-        if (matchedCount) matchedCount.textContent = '0';
-        if (progressBar) progressBar.style.width = '0%';
-        
-    } catch (error) {
-        console.error('Error loading XSS payloads:', error);
-        throw error;
-    }
-}
-
 export async function executeXSSTest() {
-    const state = getState();
-    const profile = getProfile(state.currentProfile);
-    const valueType = document.getElementById('valueType')?.value;
-    const targetKey = document.getElementById('valueSelect')?.value;
-    const xssLevel = document.getElementById('xssLevel')?.value;
-    
-    if (!valueType || !targetKey || !xssLevel) {
-        throw new Error('Missing required configuration');
-    }
+    const profile = state.profiles[state.currentProfile];
+    const valueType = document.getElementById('valueType').value;
+    const targetField = document.getElementById('valueSelect').value;
+    const xssLevel = document.getElementById('xssLevel').value;
     
     // Load payloads if not already loaded
     if (!state.xssPayloads[xssLevel]) {
@@ -330,13 +359,13 @@ export async function executeXSSTest() {
         
         // Inject payload
         if (valueType === 'params') {
-            const paramIndex = requestData.params.findIndex(([key]) => key === targetKey);
+            const paramIndex = requestData.params.findIndex(([key]) => key === targetField);
             if (paramIndex !== -1) {
                 requestData.params[paramIndex][1] = payload;
             }
         } else if (valueType === 'body') {
             if (typeof requestData.body === 'object') {
-                requestData.body[targetKey] = payload;
+                requestData.body[targetField] = payload;
             }
         }
         
@@ -363,5 +392,35 @@ export async function executeXSSTest() {
         } catch (error) {
             console.error('Error testing payload:', error);
         }
+    }
+}
+
+export async function loadXSSPayloads() {
+    const state = state;
+    const profile = state.profiles[state.currentProfile];
+    
+    try {
+        const response = await fetch(chrome.runtime.getURL(`../payloads/${profile.xssConfig.xssLevel}.txt`));
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const text = await response.text();
+        const payloads = text.split('\n').filter(line => line.trim());
+        
+        // Store payloads
+        state.xssPayloads[profile.xssConfig.xssLevel] = payloads;
+        
+        // Update total count
+        const totalCount = document.getElementById('totalCount');
+        const matchedCount = document.getElementById('matchedCount');
+        const progressBar = document.getElementById('progressBar');
+        
+        if (totalCount) totalCount.textContent = payloads.length;
+        if (matchedCount) matchedCount.textContent = '0';
+        if (progressBar) progressBar.style.width = '0%';
+        
+    } catch (error) {
+        console.error('Error loading XSS payloads:', error);
+        throw error;
     }
 }
