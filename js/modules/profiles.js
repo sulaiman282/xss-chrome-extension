@@ -2,13 +2,38 @@
 import { state, updateState, setCurrentProfile, updateProfile } from './state.js';
 import { createKeyValueRow } from './ui.js';
 
+// Event for profile changes
+const PROFILE_CHANGED_EVENT = new Event('profileChanged');
+
+// Helper function to toggle body tab visibility
+function toggleBodyTab(method) {
+    const bodyTab = document.querySelector('.tab-button[data-tab="body"]');
+    const bodyTabContent = document.getElementById('bodyTab');
+    
+    // Show body tab only for methods that can have a body
+    if (['POST', 'PUT', 'PATCH'].includes(method)) {
+        bodyTab.classList.remove('hidden');
+    } else {
+        bodyTab.classList.add('hidden');
+        bodyTabContent.classList.add('hidden');
+    }
+}
+
 export function initializeProfileManagement() {
     const profileSelect = document.getElementById('profileSelect');
     const addProfileBtn = document.getElementById('addProfile');
+    const clearBtn = document.getElementById('clearBtn');
+    const methodSelect = document.getElementById('httpMethod');
 
     // Load initial profile data
     loadProfilesIntoSelect(profileSelect);
     loadProfile(state.currentProfile);
+
+    // Method change handler
+    methodSelect.addEventListener('change', (e) => {
+        toggleBodyTab(e.target.value);
+        saveTabData('method');
+    });
 
     // Add new profile
     addProfileBtn.addEventListener('click', () => {
@@ -36,16 +61,33 @@ export function initializeProfileManagement() {
         loadProfile(e.target.value);
     });
 
+    // Clear current profile
+    clearBtn.addEventListener('click', () => {
+        console.log('Clearing current profile');
+        const currentProfileName = state.currentProfile;
+        const emptyProfile = createNewProfile(true); // true for empty values
+        updateProfile(currentProfileName, emptyProfile);
+        loadProfile(currentProfileName);
+        
+        // Hide body tab when resetting to GET
+        toggleBodyTab('GET');
+    });
+
     // Add event listeners for all tabs
     setupTabDataBinding();
 }
 
-function createNewProfile() {
+function createNewProfile(empty = false) {
     return {
-        method: document.getElementById('httpMethod').value || 'GET',
-        url: document.getElementById('urlInput').value || '',
+        method: empty ? 'GET' : (document.getElementById('httpMethod').value || 'GET'),
+        url: empty ? '' : (document.getElementById('urlInput').value || ''),
         headers: [],
         params: [],
+        body: {
+            type: 'raw',
+            content: '',
+            fields: []
+        },
         auth: {
             type: 'none',
             basic: { username: '', password: '' },
@@ -86,8 +128,12 @@ function loadProfile(profileName) {
     }
     
     // Update method and URL
-    document.getElementById('httpMethod').value = profile.method || 'GET';
+    const method = profile.method || 'GET';
+    document.getElementById('httpMethod').value = method;
     document.getElementById('urlInput').value = profile.url || '';
+    
+    // Toggle body tab based on method
+    toggleBodyTab(method);
     
     // Update params tab
     updateParamsTab(profile);
@@ -103,6 +149,9 @@ function loadProfile(profileName) {
     
     // Update results tab
     updateResultsTab(profile);
+
+    // Dispatch profile changed event
+    document.dispatchEvent(PROFILE_CHANGED_EVENT);
 }
 
 function updateParamsTab(profile) {
@@ -245,6 +294,10 @@ export function saveTabData(tabType) {
                 payloadType: document.getElementById('payloadType')?.value || 'basic.txt',
                 customPayloads: profile.xssConfig?.customPayloads || []
             };
+            break;
+            
+        case 'method':
+            profile.method = document.getElementById('httpMethod').value;
             break;
     }
     

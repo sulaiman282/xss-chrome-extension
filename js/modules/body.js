@@ -1,5 +1,7 @@
+import { state, updateProfile } from './state.js';
+
 // Function to create a new form field row
-function createFormField(container) {
+function createFormField(container, key = '', value = '', type = 'text') {
     const fieldDiv = document.createElement('div');
     fieldDiv.className = 'grid grid-cols-12 gap-2 items-center';
 
@@ -8,8 +10,11 @@ function createFormField(container) {
     keyInput.type = 'text';
     keyInput.placeholder = 'Key';
     keyInput.className = 'form-input rounded-md border-gray-300 w-full col-span-3';
+    keyInput.value = key;
+    
     // Add input event listener for key changes
     keyInput.addEventListener('input', () => {
+        saveBodyData();
         document.dispatchEvent(new Event('fieldsUpdated'));
     });
 
@@ -17,11 +22,14 @@ function createFormField(container) {
     let valueWrapper = document.createElement('div');
     valueWrapper.className = 'col-span-6';
     let valueInput = document.createElement('input');
-    valueInput.type = 'text';
+    valueInput.type = type === 'file' ? 'file' : 'text';
     valueInput.placeholder = 'Value';
     valueInput.className = 'form-input rounded-md border-gray-300 w-full';
+    if (type !== 'file') valueInput.value = value;
+    
     // Add input event listener for value changes
     valueInput.addEventListener('input', () => {
+        saveBodyData();
         document.dispatchEvent(new Event('fieldsUpdated'));
     });
     valueWrapper.appendChild(valueInput);
@@ -29,6 +37,7 @@ function createFormField(container) {
     // Type select (2 columns)
     const typeSelect = document.createElement('select');
     typeSelect.className = 'form-select rounded-md border-gray-300 w-full col-span-2';
+    typeSelect.value = type;
 
     const textOption = document.createElement('option');
     textOption.value = 'text';
@@ -47,6 +56,7 @@ function createFormField(container) {
     removeBtn.innerHTML = '×';
     removeBtn.onclick = () => {
         fieldDiv.remove();
+        saveBodyData();
         document.dispatchEvent(new Event('fieldsUpdated'));
     };
 
@@ -68,11 +78,13 @@ function createFormField(container) {
 
         // Add input event listener for new value input
         newValueInput.addEventListener('input', () => {
+            saveBodyData();
             document.dispatchEvent(new Event('fieldsUpdated'));
         });
 
         valueInput.replaceWith(newValueInput);
         valueInput = newValueInput;
+        saveBodyData();
         document.dispatchEvent(new Event('fieldsUpdated'));
     });
 
@@ -187,6 +199,15 @@ export function initializeBodyHandling() {
     const urlencodedContainer = document.getElementById('urlencodedContainer');
     const addFormField = document.getElementById('addFormField');
     const addUrlEncodedField = document.getElementById('addUrlEncodedField');
+    const bodyContent = document.getElementById('bodyContent');
+
+    // Load initial body data from profile
+    loadBodyData();
+
+    // Listen for profile changes
+    document.addEventListener('profileChanged', () => {
+        loadBodyData();
+    });
 
     // Show/hide appropriate body content based on type
     bodyType.addEventListener('change', (e) => {
@@ -204,23 +225,120 @@ export function initializeBodyHandling() {
                 urlencodedBody.classList.remove('hidden');
                 break;
         }
-        // Trigger update when body type changes
+        saveBodyData();
         document.dispatchEvent(new Event('fieldsUpdated'));
     });
 
     // Add form field buttons
-    addFormField.addEventListener('click', () => createFormField(formDataContainer));
-    addUrlEncodedField.addEventListener('click', () => createFormField(urlencodedContainer));
-
-    // Add initial fields
-    createFormField(formDataContainer);
-    createFormField(urlencodedContainer);
-
-    // Listen for field updates to refresh XSS config options
-    document.addEventListener('fieldsUpdated', () => {
-        // This will trigger a refresh of the XSS config dropdown
-        document.dispatchEvent(new Event('bodyUpdated'));
+    addFormField.addEventListener('click', () => {
+        createFormField(formDataContainer);
+        saveBodyData();
     });
+    
+    addUrlEncodedField.addEventListener('click', () => {
+        createFormField(urlencodedContainer);
+        saveBodyData();
+    });
+
+    // Save raw body content on change
+    bodyContent.addEventListener('input', () => {
+        saveBodyData();
+    });
+}
+
+function loadBodyData() {
+    const profile = state.profiles[state.currentProfile];
+    if (!profile.body) {
+        profile.body = {
+            type: 'raw',
+            content: '',
+            fields: []
+        };
+        updateProfile(state.currentProfile, profile);
+    }
+
+    const bodyType = document.getElementById('bodyType');
+    const bodyContent = document.getElementById('bodyContent');
+    const formDataContainer = document.getElementById('formDataContainer');
+    const urlencodedContainer = document.getElementById('urlencodedContainer');
+
+    // Set body type
+    bodyType.value = profile.body.type || 'raw';
+    
+    // Show correct container
+    const bodyContents = document.querySelectorAll('.body-content');
+    bodyContents.forEach(content => content.classList.add('hidden'));
+    
+    switch (profile.body.type) {
+        case 'raw':
+            document.getElementById('rawBody').classList.remove('hidden');
+            bodyContent.value = profile.body.content || '';
+            break;
+            
+        case 'form-data':
+            document.getElementById('formDataBody').classList.remove('hidden');
+            formDataContainer.innerHTML = '';
+            if (profile.body.fields) {
+                profile.body.fields.forEach(field => {
+                    createFormField(formDataContainer, field.key, field.value, field.type);
+                });
+            }
+            break;
+            
+        case 'x-www-form-urlencoded':
+            document.getElementById('urlencodedBody').classList.remove('hidden');
+            urlencodedContainer.innerHTML = '';
+            if (profile.body.fields) {
+                profile.body.fields.forEach(field => {
+                    createFormField(urlencodedContainer, field.key, field.value, field.type);
+                });
+            }
+            break;
+    }
+}
+
+function saveBodyData() {
+    const profile = { ...state.profiles[state.currentProfile] };
+    const bodyType = document.getElementById('bodyType').value;
+    const bodyContent = document.getElementById('bodyContent');
+
+    profile.body = {
+        type: bodyType,
+        content: '',
+        fields: []
+    };
+
+    switch (bodyType) {
+        case 'raw':
+            profile.body.content = bodyContent.value;
+            break;
+            
+        case 'form-data':
+            profile.body.fields = Array.from(document.querySelectorAll('#formDataContainer > div')).map(field => {
+                const [key, valueWrapper, type] = field.children;
+                const value = valueWrapper.children[0];
+                return {
+                    key: key.value,
+                    value: type.value === 'file' ? '' : value.value,
+                    type: type.value
+                };
+            });
+            break;
+            
+        case 'x-www-form-urlencoded':
+            profile.body.fields = Array.from(document.querySelectorAll('#urlencodedContainer > div')).map(field => {
+                const [key, valueWrapper, type] = field.children;
+                const value = valueWrapper.children[0];
+                return {
+                    key: key.value,
+                    value: type.value === 'file' ? '' : value.value,
+                    type: type.value
+                };
+            });
+            break;
+    }
+
+    updateProfile(state.currentProfile, profile);
 }
 
 // Function to get body data based on type
