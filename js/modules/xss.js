@@ -2,12 +2,13 @@
 import { state, updateProfile } from './state.js';
 import { sendRequest } from './request.js';
 
-export function initializeXSSConfig() {
+function initializeXSSConfig() {
     const valueType = document.getElementById('valueType');
     const valueSelect = document.getElementById('valueSelect');
     const xssLevel = document.getElementById('xssLevel');
     const startTestBtn = document.getElementById('startTest');
     const progressContainer = document.getElementById('progressContainer');
+    const scanStatus = document.getElementById('scanStatus');
 
     if (valueType && valueSelect && xssLevel && startTestBtn) {
         // Load initial config from profile
@@ -28,8 +29,9 @@ export function initializeXSSConfig() {
         });
 
         // Handle XSS level change
-        xssLevel.addEventListener('change', () => {
+        xssLevel.addEventListener('change', async () => {
             saveXSSConfig();
+            await updateTotalPayloadCount();
         });
 
         // Handle start test button
@@ -44,6 +46,9 @@ export function initializeXSSConfig() {
             // Proceed with XSS test if validation passes
             startXSSTest();
         });
+
+        // Initial update of total payload count
+        updateTotalPayloadCount();
 
         // Listen for real-time updates to params and body
         const paramsContainer = document.getElementById('paramsContainer');
@@ -421,44 +426,88 @@ function showValidationPopup(validationItems) {
     document.getElementById('closeValidationPopup').onclick = () => popup.remove();
 }
 
-async function startXSSTest() {
-    const startTestBtn = document.getElementById('startTest');
-    const progressContainer = document.getElementById('progressContainer');
+function addLogEntry(payload, response, isMatched) {
+    const testLog = document.getElementById('testLog');
+    if (!testLog) return;
 
-    startTestBtn.textContent = 'Testing...';
-    startTestBtn.disabled = true;
-    
-    if (progressContainer) {
-        progressContainer.classList.remove('hidden');
-    }
-    
+    const logEntry = document.createElement('div');
+    logEntry.className = `p-2 rounded ${isMatched ? 'bg-green-50' : 'bg-red-50'}`;
+
+    const timestamp = new Date().toLocaleTimeString();
+    const status = isMatched ? 'MATCHED' : 'NOT MATCHED';
+    const statusClass = isMatched ? 'text-green-600' : 'text-red-600';
+
+    logEntry.innerHTML = `
+        <div class="flex items-center justify-between mb-1">
+            <span class="text-gray-500">${timestamp}</span>
+            <span class="font-medium ${statusClass}">${status}</span>
+        </div>
+        <div class="text-gray-700 mb-1">
+            <span class="font-medium">Payload:</span> ${escapeHtml(payload)}
+        </div>
+        <div class="text-gray-700 overflow-x-auto">
+            <span class="font-medium">Response:</span> 
+            <span class="text-gray-600">${escapeHtml(response.substring(0, 200))}${response.length > 200 ? '...' : ''}</span>
+        </div>
+    `;
+
+    testLog.appendChild(logEntry);
+    testLog.scrollTop = testLog.scrollHeight;
+}
+
+function escapeHtml(unsafe) {
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function loadXSSPayloads() {
+    const xssLevel = document.getElementById('xssLevel').value;
+    if (!xssLevel) return;
+
     try {
-        await executeXSSTest();
-    } catch (error) {
-        console.error('Error during XSS test:', error);
-    } finally {
-        startTestBtn.textContent = 'Start Test';
-        startTestBtn.disabled = false;
-        if (progressContainer) {
-            progressContainer.classList.add('hidden');
+        const response = fetch(chrome.runtime.getURL(`payloads/${xssLevel}.txt`));
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
+        const text = response.text();
+        const payloads = text.split('\n').filter(line => line.trim());
+        
+        // Store payloads and update count
+        state.xssPayloads[xssLevel] = payloads;
+        const totalCount = document.getElementById('totalCount');
+        if (totalCount) {
+            totalCount.textContent = payloads.length;
+        }
+    } catch (error) {
+        console.error('Error loading XSS payloads:', error);
+        throw error;
     }
 }
 
-export async function executeXSSTest() {
+function executeXSSTest() {
     const profile = state.profiles[state.currentProfile];
     const valueType = document.getElementById('valueType').value;
     const targetField = document.getElementById('valueSelect').value;
     const xssLevel = document.getElementById('xssLevel').value;
     
+    // Clear previous log entries
+    const testLog = document.getElementById('testLog');
+    if (testLog) {
+        testLog.innerHTML = '';
+    }
+    
     // Load payloads if not already loaded
     if (!state.xssPayloads[xssLevel]) {
-        profile.xssConfig.xssLevel = xssLevel;
-        await loadXSSPayloads();
+        loadXSSPayloads();
     }
     
     const payloads = state.xssPayloads[xssLevel];
     let matchedCount = 0;
+    let notMatchedCount = 0;
     
     for (let i = 0; i < payloads.length; i++) {
         const payload = payloads[i];
@@ -485,57 +534,104 @@ export async function executeXSSTest() {
         }
         
         try {
-            const response = await sendRequest(requestData);
-            const responseText = await response.text();
+            const response = sendRequest(requestData);
+            const responseText = response.text();
             
             // Check if payload is reflected
-            if (responseText.includes(payload)) {
+            const isMatched = responseText.includes(payload);
+            if (isMatched) {
                 matchedCount++;
-                const matchedCountElem = document.getElementById('matchedCount');
-                if (matchedCountElem) {
-                    matchedCountElem.textContent = matchedCount;
-                }
+                document.getElementById('matchedCount').textContent = matchedCount;
+            } else {
+                notMatchedCount++;
+                document.getElementById('notMatchedCount').textContent = notMatchedCount;
             }
             
-            // Update progress bar
-            const progress = ((i + 1) / payloads.length) * 100;
-            const progressBar = document.getElementById('progressBar');
-            if (progressBar) {
-                progressBar.style.width = `${progress}%`;
-            }
+            // Add log entry
+            addLogEntry(payload, responseText, isMatched);
             
         } catch (error) {
             console.error('Error testing payload:', error);
+            notMatchedCount++;
+            document.getElementById('notMatchedCount').textContent = notMatchedCount;
+            
+            // Add error log entry
+            addLogEntry(payload, `Error: ${error.message}`, false);
         }
     }
 }
 
-export async function loadXSSPayloads() {
-    const state = state;
-    const profile = state.profiles[state.currentProfile];
+function startXSSTest() {
+    const startTestBtn = document.getElementById('startTest');
+    const scanStatus = document.getElementById('scanStatus');
+
+    startTestBtn.textContent = 'Testing...';
+    startTestBtn.disabled = true;
+    
+    if (scanStatus) {
+        scanStatus.textContent = 'In progress';
+        scanStatus.className = 'text-yellow-600';
+    }
     
     try {
-        const response = await fetch(chrome.runtime.getURL(`../payloads/${profile.xssConfig.xssLevel}.txt`));
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+        executeXSSTest();
+        if (scanStatus) {
+            scanStatus.textContent = 'Completed';
+            scanStatus.className = 'text-green-600';
         }
-        const text = await response.text();
-        const payloads = text.split('\n').filter(line => line.trim());
-        
-        // Store payloads
-        state.xssPayloads[profile.xssConfig.xssLevel] = payloads;
-        
-        // Update total count
-        const totalCount = document.getElementById('totalCount');
-        const matchedCount = document.getElementById('matchedCount');
-        const progressBar = document.getElementById('progressBar');
-        
-        if (totalCount) totalCount.textContent = payloads.length;
-        if (matchedCount) matchedCount.textContent = '0';
-        if (progressBar) progressBar.style.width = '0%';
-        
     } catch (error) {
-        console.error('Error loading XSS payloads:', error);
-        throw error;
+        console.error('Error during XSS test:', error);
+        if (scanStatus) {
+            scanStatus.textContent = 'Failed';
+            scanStatus.className = 'text-red-600';
+        }
+    } finally {
+        startTestBtn.textContent = 'Start Test';
+        startTestBtn.disabled = false;
     }
 }
+
+function updateTotalPayloadCount() {
+    const xssLevel = document.getElementById('xssLevel').value;
+    if (!xssLevel) return;
+
+    try {
+        // Load payloads and update count
+        loadXSSPayloads();
+        
+        // Reset counters and status
+        document.getElementById('matchedCount').textContent = '0';
+        document.getElementById('notMatchedCount').textContent = '0';
+        
+        const scanStatus = document.getElementById('scanStatus');
+        if (scanStatus) {
+            scanStatus.textContent = 'Not started';
+            scanStatus.className = 'text-blue-600';
+        }
+        
+        // Clear log
+        const testLog = document.getElementById('testLog');
+        if (testLog) {
+            testLog.innerHTML = '';
+        }
+        
+    } catch (error) {
+        console.error('Error updating payload count:', error);
+        document.getElementById('totalCount').textContent = '0';
+        
+        const scanStatus = document.getElementById('scanStatus');
+        if (scanStatus) {
+            scanStatus.textContent = 'Error';
+            scanStatus.className = 'text-red-600';
+        }
+    }
+}
+
+// Export all functions needed externally
+export {
+    initializeXSSConfig,
+    loadXSSPayloads,
+    startXSSTest,
+    executeXSSTest,
+    updateTotalPayloadCount
+};

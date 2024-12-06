@@ -237,24 +237,28 @@
 
             <!-- Results Tab -->
             <div id="resultsTab" class="tab-content hidden">
-                <div class="space-y-4">
-                    <div class="flex space-x-4">
-                        <div class="flex-1 bg-gray-100 p-4 rounded">
-                            <h3 class="font-medium">Total Tests</h3>
-                            <p id="totalCount" class="text-2xl font-bold text-gray-800">0</p>
+                <div class="bg-white rounded-lg shadow p-4 mb-4">
+                    <div class="flex items-center space-x-6 text-sm text-gray-600">
+                        <div class="flex items-center space-x-2">
+                            <span class="font-medium">Total payloads:</span>
+                            <span id="totalCount">0</span>
                         </div>
-                        <div class="flex-1 bg-gray-100 p-4 rounded">
-                            <h3 class="font-medium">Matched</h3>
-                            <p id="matchedCount" class="text-2xl font-bold text-green-600">0</p>
+                        <div class="flex items-center space-x-2">
+                            <span class="font-medium">Scan status:</span>
+                            <span id="scanStatus" class="text-blue-600">Not started</span>
                         </div>
-                        <div class="flex-1 bg-gray-100 p-4 rounded">
-                            <h3 class="font-medium">Not Matched</h3>
-                            <p id="notMatchedCount" class="text-2xl font-bold text-red-600">0</p>
+                        <div class="flex items-center space-x-2">
+                            <span class="font-medium">Matched:</span>
+                            <span id="matchedCount">0</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="font-medium">Not matched:</span>
+                            <span id="notMatchedCount">0</span>
                         </div>
                     </div>
-                    <div id="results" class="space-y-4">
-                        <!-- Results will be populated here -->
-                    </div>
+                </div>
+                <div id="resultsContainer" class="space-y-2">
+                    <!-- Results will be populated here -->
                 </div>
             </div>
         </div>
