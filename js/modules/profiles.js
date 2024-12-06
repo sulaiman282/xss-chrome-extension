@@ -31,6 +31,80 @@ function updateDeleteButtonVisibility() {
     }
 }
 
+function getDefaultHeaders(method, contentType = null) {
+    const headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Connection': 'keep-alive',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin',
+        'Pragma': 'no-cache',
+        'Cache-Control': 'no-cache'
+    };
+
+    // Add method-specific headers
+    switch (method.toUpperCase()) {
+        case 'POST':
+        case 'PUT':
+        case 'PATCH':
+            headers['Content-Type'] = contentType || 'application/json';
+            break;
+        case 'DELETE':
+            // Some APIs expect a content-type even for DELETE
+            if (contentType) {
+                headers['Content-Type'] = contentType;
+            }
+            break;
+    }
+
+    return headers;
+}
+
+function updateProfileHeaders(profile) {
+    const method = profile.method;
+    let contentType = null;
+
+    // Determine content type based on body type
+    if (profile.body) {
+        switch (profile.body.type) {
+            case 'form-data':
+                contentType = 'multipart/form-data';
+                break;
+            case 'x-www-form-urlencoded':
+                contentType = 'application/x-www-form-urlencoded';
+                break;
+            case 'raw':
+                // Try to determine if it's JSON
+                try {
+                    JSON.parse(profile.body.content);
+                    contentType = 'application/json';
+                } catch {
+                    contentType = 'text/plain';
+                }
+                break;
+        }
+    }
+
+    // Get default headers with the appropriate content type
+    const defaultHeaders = getDefaultHeaders(method, contentType);
+
+    // Merge with existing headers, keeping custom headers but updating defaults
+    const updatedHeaders = { ...defaultHeaders };
+    
+    // Preserve custom headers that aren't in defaults
+    if (profile.headers) {
+        Object.entries(profile.headers).forEach(([key, value]) => {
+            if (!Object.keys(defaultHeaders).includes(key.toLowerCase())) {
+                updatedHeaders[key] = value;
+            }
+        });
+    }
+
+    return updatedHeaders;
+}
+
 export function initializeProfileManagement() {
     const profileSelect = document.getElementById('profileSelect');
     const addProfileBtn = document.getElementById('addProfile');
@@ -144,7 +218,7 @@ function createNewProfile(empty = false) {
     return {
         method: empty ? 'GET' : (document.getElementById('httpMethod').value || 'GET'),
         url: empty ? '' : (document.getElementById('urlInput').value || ''),
-        headers: [],
+        headers: getDefaultHeaders(empty ? 'GET' : (document.getElementById('httpMethod').value || 'GET')),
         params: [],
         body: {
             type: 'raw',
@@ -189,6 +263,12 @@ function loadProfile(profileName) {
         console.error('Profile not found:', profileName);
         return;
     }
+    
+    // Update headers with defaults based on current method and body type
+    profile.headers = updateProfileHeaders(profile);
+    
+    // Update state with modified profile
+    updateProfile(profileName, profile);
     
     // Update method and URL
     const method = profile.method || 'GET';
@@ -255,9 +335,9 @@ function updateAuthTab(profile) {
 function updateHeadersTab(profile) {
     const container = document.getElementById('headersContainer');
     container.innerHTML = '';
-    if (profile.headers && Array.isArray(profile.headers)) {
-        profile.headers.forEach(header => {
-            const row = createKeyValueRow('headers', header.key || '', header.value || '');
+    if (profile.headers && typeof profile.headers === 'object') {
+        Object.entries(profile.headers).forEach(([key, value]) => {
+            const row = createKeyValueRow('headers', key, value);
             container.appendChild(row);
         });
     }
@@ -346,9 +426,8 @@ export function saveTabData(tabType) {
         case 'headers':
             profile.headers = Array.from(document.getElementById('headersContainer').querySelectorAll('.key-value-row'))
                 .map(row => ({
-                    key: row.querySelector('.key-input')?.value || '',
-                    value: row.querySelector('.value-input')?.value || ''
-                }));
+                    [row.querySelector('.key-input')?.value || '']: row.querySelector('.value-input')?.value || ''
+                })).reduce((acc, curr) => ({ ...acc, ...curr }), {});
             break;
             
         case 'xssconfig':
@@ -361,6 +440,7 @@ export function saveTabData(tabType) {
             
         case 'method':
             profile.method = document.getElementById('httpMethod').value;
+            profile.headers = updateProfileHeaders(profile);
             break;
     }
     
